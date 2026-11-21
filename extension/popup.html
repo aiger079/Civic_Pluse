@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>CivicPulse Fact-Checker</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      width: 370px;
+      background: #0f172a;
+      color: #f8fafc;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      padding: 16px;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #1e293b;
+      padding-bottom: 10px;
+      margin-bottom: 12px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .brand h2 {
+      font-size: 14.5px;
+      font-weight: 700;
+      color: #f8fafc;
+    }
+
+    .status-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #10b981;
+    }
+
+    .status-dot.offline { background: #ef4444; }
+
+    .status-text {
+      font-size: 11px;
+      color: #94a3b8;
+    }
+
+    /* Privacy Notice */
+    .privacy-card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 10.5px;
+      color: #94a3b8;
+      line-height: 1.4;
+      margin-bottom: 12px;
+    }
+
+    .privacy-card strong {
+      color: #93c5fd;
+    }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+      background: #111827;
+      padding: 8px 10px;
+      border-radius: 6px;
+      border: 1px solid #1f2937;
+    }
+
+    .toggle-label {
+      font-size: 11.5px;
+      color: #cbd5e1;
+      font-weight: 500;
+    }
+
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 36px;
+      height: 20px;
+    }
+
+    .switch input { opacity: 0; width: 0; height: 0; }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #334155;
+      transition: .3s;
+      border-radius: 20px;
+    }
+
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 14px;
+      width: 14px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .3s;
+      border-radius: 50%;
+    }
+
+    input:checked + .slider { background-color: #3b82f6; }
+    input:checked + .slider:before { transform: translateX(16px); }
+
+    textarea {
+      width: 100%;
+      height: 70px;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 10px;
+      color: #fff;
+      font-size: 12px;
+      font-family: inherit;
+      resize: none;
+      margin-bottom: 10px;
+    }
+
+    textarea:focus { outline: none; border-color: #3b82f6; }
+
+    .btn {
+      width: 100%;
+      background: #2563eb;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 9px;
+      font-weight: 600;
+      font-size: 12.5px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: background 0.15s;
+    }
+
+    .btn:hover { background: #1d4ed8; }
+
+    .result-box {
+      margin-top: 10px;
+      padding: 10px;
+      background: #1e293b;
+      border-radius: 8px;
+      border: 1px solid #334155;
+      display: none;
+    }
+
+    .verdict-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+
+    .verdict-tag {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-size: 10.5px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .tag-true { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+    .tag-fake { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+    .tag-rumour { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+
+    .confidence-text {
+      font-size: 11px;
+      color: #94a3b8;
+      font-weight: 600;
+    }
+
+    .result-summary {
+      font-size: 11.5px;
+      color: #e2e8f0;
+      line-height: 1.4;
+    }
+
+    .sources-list {
+      margin-top: 6px;
+      padding-top: 6px;
+      border-top: 1px solid #334155;
+      font-size: 10.5px;
+      color: #93c5fd;
+    }
+
+    .open-lab-link {
+      display: block;
+      text-align: center;
+      margin-top: 10px;
+      color: #60a5fa;
+      text-decoration: none;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .open-lab-link:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="brand">
+      <span style="font-size: 16px;">🛡️</span>
+      <h2>CivicPulse</h2>
+    </div>
+    <div style="display: flex; align-items: center; gap: 6px;">
+      <span id="statusDot" class="status-dot"></span>
+      <span id="statusText" class="status-text">Checking...</span>
+    </div>
+  </div>
+
+  <div class="privacy-card">
+    <strong>🔒 Privacy & Data Transparency:</strong> When you check a claim, its text and the website domain are sent to the CivicPulse backend. The backend searches with Groq and may send the claim and domain to Google Gemini Search if Groq is unavailable or returns no usable sources. Cookies, logins, and browsing history are not sent.
+  </div>
+
+  <div class="toggle-row">
+    <span class="toggle-label">Passive On-Screen Detection</span>
+    <label class="switch">
+      <input type="checkbox" id="passiveScanToggle">
+      <span class="slider"></span>
+    </label>
+  </div>
+
+  <textarea id="claimInput" placeholder="Paste claim or YouTube/Instagram fact to verify..."></textarea>
+  <button id="verifyBtn" class="btn">⚡ Verify Claim</button>
+
+  <div id="resultBox" class="result-box">
+    <div class="verdict-header">
+      <span id="verdictTag" class="verdict-tag">--</span>
+      <span id="confidenceText" class="confidence-text">Confidence: --</span>
+    </div>
+    <p id="resultSummary" class="result-summary"></p>
+    <div id="sourcesContainer" class="sources-list" style="display: none;"></div>
+  </div>
+
+  <a href="https://civicpluse.naxiv.com" target="_blank" class="open-lab-link">🚀 Open Full CivicPulse AI Engine Lab &rarr;</a>
+
+  <script src="popup.js"></script>
+</body>
+</html>

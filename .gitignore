@@ -1,0 +1,20 @@
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# Local Vercel metadata
+.vercel/
+
+# Mutable local/demo records can contain personal data and are not source files.
+backend/data/*.json
+
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.venv/
+venv/
+*.tmp

@@ -1,0 +1,1643 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CivicPulse AI Engine Lab & Ledger</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #090d16;
+      --card-bg: #111827;
+      --card-border: #1f2937;
+      --primary: #3b82f6;
+      --primary-glow: rgba(59, 130, 246, 0.25);
+      --success: #10b981;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --purple: #8b5cf6;
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --font: 'Plus Jakarta Sans', sans-serif;
+      --mono: 'JetBrains Mono', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Toast notification */
+    #toastContainer {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      pointer-events: none;
+    }
+
+    .toast {
+      pointer-events: auto;
+      min-width: 280px;
+      max-width: 400px;
+      background: #1e293b;
+      color: #f8fafc;
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      border-left: 4px solid var(--primary);
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      animation: toastIn 0.25s ease-out;
+    }
+
+    .toast.success { border-left-color: var(--success); }
+    .toast.error { border-left-color: var(--danger); background: #1c1917; }
+    .toast.warning { border-left-color: var(--warning); }
+
+    @keyframes toastIn {
+      from { transform: translateX(50px); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+
+    header {
+      background: rgba(17, 24, 39, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--card-border);
+      padding: 14px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-logo {
+      width: 38px;
+      height: 38px;
+      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+      border-radius: 9px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 19px;
+      box-shadow: 0 0 16px var(--primary-glow);
+    }
+
+    .brand-text h1 {
+      font-size: 1.1rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      background: linear-gradient(90deg, #fff, #93c5fd);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .brand-text p {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .api-key-input {
+      background: #0b0f19;
+      border: 1px solid var(--card-border);
+      color: #93c5fd;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      width: 190px;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: #34d399;
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      background: #10b981;
+      border-radius: 50%;
+      box-shadow: 0 0 8px #10b981;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    main {
+      flex: 1;
+      max-width: 1400px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .telemetry-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 14px;
+    }
+
+    .metric-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .metric-title {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 600;
+    }
+
+    .metric-val {
+      font-size: 1.6rem;
+      font-weight: 800;
+      color: #fff;
+    }
+
+    .metric-val.green { color: #34d399; }
+    .metric-val.blue { color: #60a5fa; }
+    .metric-val.amber { color: #fbbf24; }
+    .metric-val.purple { color: #c084fc; }
+
+    .tab-nav {
+      display: flex;
+      gap: 8px;
+      border-bottom: 1px solid var(--card-border);
+      padding-bottom: 10px;
+      flex-wrap: wrap;
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-muted);
+      padding: 7px 16px;
+      border-radius: 7px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 600;
+      transition: all 0.15s;
+    }
+
+    .tab-btn:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .tab-btn.active {
+      color: #fff;
+      background: #1f2937;
+      border-color: #374151;
+    }
+
+    .tab-panel {
+      display: none;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    .tab-panel.active { display: grid; }
+
+    @media (max-width: 900px) {
+      .tab-panel { grid-template-columns: 1fr; }
+    }
+
+    .panel-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .panel-header h2 {
+      font-size: 1rem;
+      font-weight: 700;
+    }
+
+    .preset-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 4px;
+    }
+
+    .preset-chip {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--card-border);
+      color: #93c5fd;
+      padding: 4px 9px;
+      border-radius: 6px;
+      font-size: 0.72rem;
+      cursor: pointer;
+      font-weight: 500;
+      transition: all 0.15s;
+    }
+
+    .preset-chip:hover {
+      background: rgba(59, 130, 246, 0.15);
+      border-color: var(--primary);
+    }
+
+    textarea, input[type="text"], select {
+      width: 100%;
+      background: #0b0f19;
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: #fff;
+      font-family: inherit;
+      font-size: 0.88rem;
+      line-height: 1.4;
+      transition: border-color 0.2s;
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 95px;
+    }
+
+    textarea:focus, input[type="text"]:focus, select:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px var(--primary-glow);
+    }
+
+    .input-error {
+      border-color: var(--danger) !important;
+      box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.25) !important;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      color: #fff;
+      border: none;
+      padding: 10px 18px;
+      border-radius: 7px;
+      font-weight: 700;
+      font-size: 0.9rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.15s;
+    }
+
+    .btn-primary:hover {
+      background: linear-gradient(135deg, #3b82f6, #2563eb);
+      transform: translateY(-1px);
+    }
+
+    .btn-approve {
+      background: #10b981;
+      color: #fff;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 0.78rem;
+      cursor: pointer;
+    }
+
+    .btn-reject {
+      background: #ef4444;
+      color: #fff;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 0.78rem;
+      cursor: pointer;
+    }
+
+    .btn-resolve {
+      background: #3b82f6;
+      color: #fff;
+      border: none;
+      padding: 4px 10px;
+      border-radius: 5px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .btn-delete {
+      background: #475569;
+      color: #cbd5e1;
+      border: none;
+      padding: 4px 10px;
+      border-radius: 5px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .verdict-box {
+      border-radius: 10px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      background: #0b0f19;
+      border: 1px solid var(--card-border);
+    }
+
+    .verdict-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .verdict-pill {
+      padding: 5px 12px;
+      border-radius: 16px;
+      font-size: 0.8rem;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .pill-true { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid #10b981; }
+    .pill-fake { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid #ef4444; }
+    .pill-rumour { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid #f59e0b; }
+    .pill-toxic { background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid #a855f7; }
+    .pill-pending { background: rgba(59, 130, 246, 0.15); color: #93c5fd; border: 1px solid #3b82f6; }
+    .pill-urgent { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid #ef4444; }
+
+    .status-tag {
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 0.68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .status-active { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+    .status-resolved { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
+    .status-expired { background: rgba(100, 116, 139, 0.2); color: #94a3b8; }
+
+    .uncertainty-banner {
+      background: rgba(245, 158, 11, 0.12);
+      border-left: 3px solid #f59e0b;
+      padding: 9px 12px;
+      border-radius: 0 6px 6px 0;
+      font-size: 0.82rem;
+      color: #fde68a;
+      line-height: 1.4;
+    }
+
+    .score-meter {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .score-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    .progress-bar-bg {
+      background: #1f2937;
+      height: 8px;
+      border-radius: 4px;
+      overflow: hidden;
+      display: flex;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.4s ease;
+    }
+
+    .explanation-text {
+      font-size: 0.86rem;
+      line-height: 1.5;
+      color: #d1d5db;
+    }
+
+    .sources-box {
+      background: #111827;
+      border: 1px solid var(--card-border);
+      border-radius: 7px;
+      padding: 10px 12px;
+    }
+
+    .sources-box h4 {
+      font-size: 0.76rem;
+      color: #93c5fd;
+      margin-bottom: 6px;
+    }
+
+    .sources-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      padding: 0;
+    }
+
+    .source-item a {
+      color: #60a5fa;
+      text-decoration: none;
+      font-size: 0.78rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .source-item a:hover { text-decoration: underline; }
+
+    .clean-text-box {
+      background: rgba(16, 185, 129, 0.08);
+      border-left: 3px solid #10b981;
+      padding: 9px 12px;
+      border-radius: 0 6px 6px 0;
+      font-size: 0.82rem;
+      color: #6ee7b7;
+    }
+
+    .incident-review-card {
+      background: #111827;
+      border: 1px solid #3b82f6;
+      border-radius: 9px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .incident-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .incident-actions {
+      display: flex;
+      gap: 6px;
+      justify-content: flex-end;
+    }
+
+    .helpers-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .helper-item {
+      background: #0b0f19;
+      border: 1px solid var(--card-border);
+      border-radius: 7px;
+      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .helper-info h5 {
+      font-size: 0.82rem;
+      color: #fff;
+    }
+
+    .helper-info p {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .helper-dist {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      color: #60a5fa;
+      background: rgba(59, 130, 246, 0.1);
+      padding: 3px 7px;
+      border-radius: 4px;
+    }
+
+    .filter-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Toast notifications -->
+  <div id="toastContainer"></div>
+
+  <header>
+    <div class="brand">
+      <div class="brand-logo">🛡️</div>
+      <div class="brand-text">
+        <h1>CivicPulse AI Lab</h1>
+        <p>Community signal triage, preliminary AI checks & human-reviewed mutual aid</p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <input type="password" id="adminApiKey" class="api-key-input" value="" placeholder="Admin X-API-Key" title="API Key for approving dispatches and modifying claims">
+      <div class="status-badge">
+        <span class="status-dot"></span>
+        <span id="engineStatusText">Secure & Persistent Active</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Telemetry -->
+    <div class="telemetry-grid">
+      <div class="metric-card">
+        <div class="metric-title">Noise Filter Rate</div>
+        <div class="metric-val green" id="statNoisePct">0%</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-title">Rumours Suppressed</div>
+        <div class="metric-val amber" id="statRumours">0</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-title">Pending Human Reviews</div>
+        <div class="metric-val blue" id="statPendingReviews">0</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-title">Approved Dispatches</div>
+        <div class="metric-val purple" id="statApprovedDispatches">0</div>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="tab-nav">
+      <button class="tab-btn active" onclick="switchTab('tab-factcheck')">🔍 Auditable Fact-Checker</button>
+      <button class="tab-btn" onclick="switchTab('tab-stream')">⚡ Safe Stream & Human Review Queue</button>
+      <button class="tab-btn" onclick="switchTab('tab-regression')">🧪 Regression Suite (Transformer Cases)</button>
+      <button class="tab-btn" onclick="switchTab('tab-claims')">📚 Claim Ledger & Audit History</button>
+    </div>
+
+    <!-- Tab 1: Auditable Fact-Checker -->
+    <div id="tab-factcheck" class="tab-panel active">
+      <div class="panel-card">
+        <div class="panel-header">
+          <h2>Predictability & Fact-Check Tester</h2>
+        </div>
+
+        <div class="preset-chips">
+          <span class="preset-chip" onclick="loadFactPreset(1)">⚡ Viral 5G Radiation Hoax</span>
+          <span class="preset-chip" onclick="loadFactPreset(2)">⚡ Transformer Blackout Rumour</span>
+          <span class="preset-chip" onclick="loadFactPreset(3)">⚡ COVID Garlic Cure Forward</span>
+          <span class="preset-chip" onclick="loadFactPreset(4)">⚡ Vague Rumour (Uncertainty Test)</span>
+        </div>
+
+        <textarea id="factCheckInput" maxlength="1500" placeholder="Paste a claim for a preliminary live-web-search assessment..."></textarea>
+
+        <button class="btn-primary" onclick="runFactCheck()">
+          <span>⚡ Create Preliminary Assessment</span>
+        </button>
+      </div>
+
+      <div class="panel-card">
+        <div class="panel-header">
+          <h2>Preliminary Assessment & References</h2>
+          <span style="font-size: 0.72rem; color: var(--text-muted);">Live search; verdicts remain preliminary</span>
+        </div>
+
+        <div id="factCheckResult" class="verdict-box">
+          <div class="verdict-header">
+            <span id="verdictPill" class="verdict-pill pill-rumour">Awaiting Input</span>
+            <span id="verdictConfidence" style="font-size: 0.8rem; font-weight: 700; color: #94a3b8;">Confidence: Calibrating...</span>
+          </div>
+
+          <div id="uncertaintyBox" class="uncertainty-banner" style="display: none;">
+            <strong>⚠️ Preliminary result:</strong> Live search may retrieve relevant pages, but the verdict and source relevance can still be wrong. Confirm important claims with primary sources.
+          </div>
+
+          <div class="score-meter">
+            <div class="score-labels">
+              <span>Model-estimated truth (unverified)</span>
+              <span id="truthScoreLabel">0%</span>
+            </div>
+            <div class="progress-bar-bg">
+              <div id="truthBar" class="progress-bar-fill" style="width: 0%; background: #10b981;"></div>
+            </div>
+          </div>
+
+          <div class="score-meter">
+            <div class="score-labels">
+              <span>Model-estimated falsehood (unverified)</span>
+              <span id="falsehoodScoreLabel">0%</span>
+            </div>
+            <div class="progress-bar-bg">
+              <div id="falsehoodBar" class="progress-bar-fill" style="width: 0%; background: #ef4444;"></div>
+            </div>
+          </div>
+
+          <div id="factSummary" class="explanation-text" style="font-weight: 600; color: #fff;">
+            Run a search to inspect a preliminary model assessment and retrieved web sources.
+          </div>
+
+          <div id="factExplanation" class="explanation-text"></div>
+
+          <div id="sourcesCard" class="sources-box" style="display: none;">
+            <h4>📑 Live search pages (check relevance):</h4>
+            <ul id="sourcesListUl" class="sources-list"></ul>
+          </div>
+
+          <div id="factAdvice" class="uncertainty-banner" style="display:none; background: rgba(59, 130, 246, 0.1); border-left-color: #3b82f6; color: #bfdbfe;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab 2: Safe Stream & Human-in-the-Loop Review -->
+    <div id="tab-stream" class="tab-panel">
+      <div class="panel-card">
+        <div class="panel-header">
+          <h2>Simulate Ingest Message</h2>
+        </div>
+
+        <div class="preset-chips">
+          <span class="preset-chip" onclick="loadStreamPreset(1)">🚨 P1 Chest Pain Emergency (Urgent Need)</span>
+          <span class="preset-chip" onclick="loadStreamPreset(2)">🚨 P2 Basement Flood (Corroborated)</span>
+          <span class="preset-chip" onclick="loadStreamPreset(3)">❌ False Transformer Rumour (Suppressed)</span>
+          <span class="preset-chip" onclick="loadStreamPreset(4)">🤬 Toxic Dispute (Cleanse & Rewrite)</span>
+        </div>
+
+        <textarea id="streamInput" maxlength="1000" placeholder="Simulate incoming WhatsApp Web message..."></textarea>
+        <button class="btn-primary" onclick="runStreamIngest()">
+          <span>⚡ Process Message (Safe Routing)</span>
+        </button>
+
+        <div id="streamResultBox" class="verdict-box" style="margin-top: 10px; display: none;">
+          <div class="verdict-header">
+            <span id="streamActionPill" class="verdict-pill pill-pending">--</span>
+            <span id="streamScores" style="font-family: var(--mono); font-size: 0.72rem;"></span>
+          </div>
+          <div id="cleanTextDisplay" class="clean-text-box" style="display: none;"></div>
+          <div id="streamMessageNotice" class="explanation-text"></div>
+        </div>
+      </div>
+
+      <div class="panel-card">
+        <div class="panel-header">
+          <h2>Human-in-the-Loop Review Queue</h2>
+          <span style="font-size: 0.72rem; color: #60a5fa;">Moderator Approval Required</span>
+        </div>
+
+        <div id="pendingQueueContainer" style="display: flex; flex-direction: column; gap: 10px;">
+          <div id="noPendingNotice" style="color: var(--text-muted); font-size: 0.82rem; padding: 16px 0; text-align: center;">
+            No incidents awaiting human review. Corroborated or urgent alerts will appear here before any volunteers are contacted.
+          </div>
+          <div id="pendingList" style="display: flex; flex-direction: column; gap: 10px;"></div>
+        </div>
+
+        <!-- Dispatched Helpers (Only visible once approved) -->
+        <div id="approvedHelpersCard" style="display: none; margin-top: 10px;">
+          <h4 style="font-size: 0.82rem; margin-bottom: 6px; color: #10b981;">✅ Approved Incident Dispatched Helpers:</h4>
+          <div id="approvedHelpersList" class="helpers-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab 3: Regression Suite -->
+    <div id="tab-regression" class="tab-panel">
+      <div class="panel-card" style="grid-column: span 2;">
+        <div class="panel-header">
+          <h2>Regression Suite: "Transformer Operational" vs "Transformer Exploded"</h2>
+          <span style="font-size: 0.75rem; color: var(--text-muted);">NLI check against a synthetic fixture</span>
+        </div>
+
+        <div style="background: #111827; border: 1px solid var(--card-border); padding: 14px; border-radius: 8px; margin-bottom: 10px;">
+          <h4 style="font-size: 0.82rem; color: #93c5fd; margin-bottom: 4px;">Synthetic test fixture (not live ground truth):</h4>
+          <p style="font-size: 0.82rem; color: #fff;">
+            <strong>[claim_transformer]:</strong> "Transformer at Gate 1 is operational; power restored in Tower C."
+          </p>
+          <p style="font-size: 0.72rem; color: #94a3b8; margin-top: 3px;">
+            Used only by this dry-run test; it does not verify real utility status or write to the incident ledger.
+          </p>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+          <div style="background: #0b0f19; border: 1px solid var(--card-border); padding: 12px; border-radius: 8px;">
+            <h4 style="font-size: 0.82rem; color: #f87171; margin-bottom: 6px;">Test A: Exploded Rumour</h4>
+            <p style="font-size: 0.78rem; color: #cbd5e1; font-style: italic; margin-bottom: 8px;">
+              "Main gate transformer exploded, entire complex will have blackout for next 3 days!"
+            </p>
+            <button class="btn-primary" style="padding: 6px 10px; font-size: 0.75rem;" onclick="runRegressionTest('exploded')">
+              Run Test A
+            </button>
+            <div id="regressionResultA" style="margin-top: 8px; font-size: 0.78rem;"></div>
+          </div>
+
+          <div style="background: #0b0f19; border: 1px solid var(--card-border); padding: 12px; border-radius: 8px;">
+            <h4 style="font-size: 0.82rem; color: #34d399; margin-bottom: 6px;">Test B: Operational Corroboration</h4>
+            <p style="font-size: 0.78rem; color: #cbd5e1; font-style: italic; margin-bottom: 8px;">
+              "Transformer operational, lights are working fine at Gate 1 and Tower C."
+            </p>
+            <button class="btn-primary" style="padding: 6px 10px; font-size: 0.75rem;" onclick="runRegressionTest('operational')">
+              Run Test B
+            </button>
+            <div id="regressionResultB" style="margin-top: 8px; font-size: 0.78rem;"></div>
+          </div>
+        </div>
+
+        <!-- Clean preview info without raw LaTeX -->
+        <div style="margin-top: 14px; padding: 12px; background: #0f172a; border-radius: 8px; border: 1px solid #1e293b; font-size: 0.78rem; color: #94a3b8; line-height: 1.6;">
+          <strong style="color: #cbd5e1;">How Verification Rules Work (Human-Readable):</strong>
+          <ul style="margin: 6px 0 0 16px;">
+            <li><strong>Rumour Triage:</strong> When contradiction with an eligible, admin-attested ledger claim is ≥ 70%, the message is flagged as disputed.</li>
+            <li><strong>Corroboration & Human Queue:</strong> When Entailment is ≥ 75%, it is corroborated and queued in Pending Review for moderator verification before any volunteer is alerted.</li>
+            <li><strong>Hyperlocal Matching:</strong> Helper Score = (Capability Match × Availability) / (Distance in Meters + 1), with 2-hour fatigue cooldown.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab 4: Claim Ledger & Audit History -->
+    <div id="tab-claims" class="tab-panel">
+      <div class="panel-card">
+        <div class="panel-header">
+          <h2>Add a Claim to the Ledger</h2>
+        </div>
+        <p class="explanation-text">Statuses and links are supplied by the administrator; CivicPulse does not verify identities or fetch these pages.</p>
+        <textarea id="newClaimInput" maxlength="500" placeholder="Enter claim text to record (min 10 characters)..."></textarea>
+        
+        <select id="newClaimCategory">
+          <option value="utility_flood">Utility: Flood / Drainage</option>
+          <option value="electrical_grid">Electrical: Power / Transformers</option>
+          <option value="medical_emergency">Medical & Health Emergency</option>
+          <option value="fire_safety">Fire & Gas Safety</option>
+          <option value="infrastructure">Infrastructure: Lifts / Gates</option>
+          <option value="general">General Civic Notice</option>
+        </select>
+
+        <input type="text" id="newClaimVerifier" maxlength="100" placeholder="Verifier Identity (e.g. Estate Office, Security Desk Gate 1)">
+        <select id="newClaimVerifierStatus">
+          <option value="UNCONFIRMED" selected>Unconfirmed (default; not used as evidence)</option>
+          <option value="COMMUNITY_WITNESSED">Community witnessed (requires 2+ witnesses)</option>
+          <option value="OFFICIALLY_VERIFIED">Official source reviewed by admin</option>
+        </select>
+        <input type="number" id="newClaimWitnessCount" min="1" max="1000" value="1" aria-label="Number of independent witnesses">
+        <input type="text" id="newClaimSources" maxlength="300" placeholder="HTTPS source link(s); saved but not fetched">
+        
+        <button class="btn-primary" onclick="addClaimSecure()">
+          <span>➕ Save Ledger Claim (Requires API Key)</span>
+        </button>
+      </div>
+
+      <div class="panel-card">
+        <div class="panel-header">
+          <h2>Ledger Claims & History</h2>
+          <p class="explanation-text">Verifier labels are manual attestations. Source URLs are stored but not independently checked.</p>
+          <div class="filter-bar">
+            <label style="cursor: pointer;">
+              <input type="checkbox" id="showResolvedToggle" checked onchange="loadClaims()">
+              Include Resolved/Expired History
+            </label>
+          </div>
+        </div>
+        <div id="claimsList" class="helpers-list" style="max-height: 400px; overflow-y: auto;"></div>
+      </div>
+
+      <div class="panel-card" style="grid-column: span 2; margin-top: 8px;">
+        <div class="panel-header">
+          <h2>Immutable Security Audit Log</h2>
+          <button class="btn-primary" style="padding: 4px 12px; font-size: 0.72rem;" onclick="loadAuditLog()">↻ Refresh Audit Log</button>
+        </div>
+        <div id="auditLogList" style="max-height: 240px; overflow-y: auto; background: #0b0f19; border: 1px solid var(--card-border); border-radius: 6px; padding: 12px; font-family: var(--mono); font-size: 0.75rem; color: #94a3b8;">
+          Enter Admin API Key and click "Refresh Audit Log" to view security trail.
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      toast.className = `toast ${type}`;
+      toast.textContent = message;
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(30px)';
+        toast.style.transition = 'all 0.3s ease';
+        setTimeout(() => toast.remove(), 300);
+      }, 3500);
+    }
+
+    function getApiKey() {
+      const el = document.getElementById('adminApiKey');
+      const val = el ? el.value.trim() : '';
+      if (val) {
+        sessionStorage.setItem('civicpulse_admin_key', val);
+      }
+      return val;
+    }
+
+    function initApiKey() {
+      const el = document.getElementById('adminApiKey');
+      if (!el) return;
+      const stored = sessionStorage.getItem('civicpulse_admin_key');
+      if (stored) {
+        el.value = stored;
+      }
+      el.addEventListener('input', (e) => {
+        sessionStorage.setItem('civicpulse_admin_key', e.target.value.trim());
+        loadPendingIncidents();
+      });
+    }
+
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      event.target.classList.add('active');
+      document.getElementById(tabId).classList.add('active');
+      if (tabId === 'tab-claims') {
+        loadAuditLog();
+      }
+    }
+
+    function createSafeElement(tag, text, className) {
+      const el = document.createElement(tag);
+      if (text) el.textContent = text;
+      if (className) el.className = className;
+      return el;
+    }
+
+    function safeReferenceUrl(value) {
+      try {
+        const url = new URL(value);
+        if (url.protocol !== "https:" || !url.hostname || url.pathname === "/" || url.username || url.password) return null;
+        return url.href;
+      } catch {
+        return null;
+      }
+    }
+
+    const factPresets = {
+      1: "NASA satellite confirms 5G radiation is shutting down society water pumps across North India.",
+      2: "BREAKING: Main gate transformer blast ho gaya hai, light agle 3 din tak nahi aayegi pura blackout rahega!",
+      3: "Drinking boiled garlic water with ginger completely destroys virus in 24 hours. Forward to everyone!",
+      4: "Someone heard a weird noise at back gate, maybe something broke."
+    };
+
+    const streamPresets = {
+      1: "Emergency: Resident in D-203 having severe chest pain, need emergency first aid volunteer right now!",
+      2: "Emergency! Heavy rain ki wajah se Block B parking area mein paani bhar gaya hai, basement flooded. Need drainage pump urgent!",
+      3: "Main gate transformer exploded, entire complex will have blackout for next 3 days!",
+      4: "Tum sab bewakoof ho! Lift mein kachra kyu feka hai tum logo ne? Shame on you all mannersless people!"
+    };
+
+    function loadFactPreset(id) {
+      document.getElementById('factCheckInput').value = factPresets[id];
+      document.getElementById('factCheckInput').classList.remove('input-error');
+    }
+
+    function loadStreamPreset(id) {
+      document.getElementById('streamInput').value = streamPresets[id];
+      document.getElementById('streamInput').classList.remove('input-error');
+    }
+
+    async function runFactCheck() {
+      const input = document.getElementById('factCheckInput');
+      const text = input.value.trim();
+      
+      // Inline feedback on empty input
+      if (!text) {
+        input.classList.add('input-error');
+        showToast("Please enter a fact or claim text to evaluate.", "warning");
+        return;
+      }
+      input.classList.remove('input-error');
+
+      document.getElementById('verdictPill').textContent = "Analyzing...";
+      document.getElementById('factSummary').textContent = "Preparing a preliminary model assessment...";
+      document.getElementById('uncertaintyBox').style.display = "none";
+      document.getElementById('sourcesCard').style.display = "none";
+
+      try {
+        const res = await fetch("/api/fact-check", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text, context: "student_web_selection" })
+        });
+        
+        if (!res.ok) {
+          showToast(`Fact check request failed: ${res.statusText}`, "error");
+          return;
+        }
+
+        const data = await res.json();
+        const a = data.analysis;
+
+        const pill = document.getElementById('verdictPill');
+        pill.textContent = a.verdict || "ANALYZED";
+        pill.className = "verdict-pill";
+
+        if (a.verdict === "VERIFIED_TRUE") pill.classList.add("pill-true");
+        else if (a.verdict === "FABRICATED_HOAX" || a.verdict === "DISPUTED_RUMOUR") pill.classList.add("pill-fake");
+        else pill.classList.add("pill-rumour");
+
+        const confPct = Math.round((a.confidence !== undefined ? a.confidence : 0.35) * 100);
+        document.getElementById('verdictConfidence').textContent = `Confidence: ${confPct}%`;
+
+        if (a.uncertainty_state) {
+          document.getElementById('uncertaintyBox').style.display = "block";
+        }
+
+        const truthEstimate = a.model_estimate?.truth_score ?? a.truth_score ?? 0.5;
+        const falseEstimate = a.model_estimate?.falsehood_score ?? a.falsehood_score ?? 0.5;
+        const truthPct = Math.round(Math.max(0, Math.min(1, truthEstimate)) * 100);
+        const falsePct = Math.round(Math.max(0, Math.min(1, falseEstimate)) * 100);
+
+        document.getElementById('truthScoreLabel').textContent = truthPct + "%";
+        document.getElementById('truthBar').style.width = truthPct + "%";
+
+        document.getElementById('falsehoodScoreLabel').textContent = falsePct + "%";
+        document.getElementById('falsehoodBar').style.width = falsePct + "%";
+
+      document.getElementById('factSummary').textContent = a.summary || "";
+        document.getElementById('factExplanation').textContent = a.explanation || "";
+      const searchProviderName = a.provider_used === "gemini"
+        ? "Google Gemini"
+        : a.provider_used === "groq"
+          ? "Groq"
+          : "live search";
+      document.querySelector('#sourcesCard h4').textContent = a.search_performed
+        ? `📑 Live search pages from ${searchProviderName} (check relevance):`
+        : "📑 Suggested references:";
+
+        const sourcesUl = document.getElementById('sourcesListUl');
+        sourcesUl.textContent = "";
+        if (a.sources && a.sources.length > 0) {
+          document.getElementById('sourcesCard').style.display = "block";
+          a.sources.forEach(s => {
+            const safeUrl = safeReferenceUrl(s.url);
+            if (!safeUrl) return;
+            const li = document.createElement("li");
+            li.className = "source-item";
+            const aTag = document.createElement("a");
+            aTag.href = safeUrl;
+            aTag.target = "_blank";
+            aTag.rel = "noopener noreferrer";
+            aTag.textContent = `🔗 ${s.title || s.url} (${s.type || 'reference'})`;
+            li.appendChild(aTag);
+            sourcesUl.appendChild(li);
+          });
+        }
+
+        const adviceBox = document.getElementById('factAdvice');
+        if (a.actionable_advice) {
+          adviceBox.style.display = "block";
+          adviceBox.textContent = "💡 Advice: " + a.actionable_advice;
+        } else {
+          adviceBox.style.display = "none";
+        }
+
+        showToast("Fact check evaluation completed.", "success");
+        updateStats();
+      } catch (err) {
+        showToast("Error connecting to fact check API: " + err, "error");
+      }
+    }
+
+    async function runStreamIngest() {
+      const input = document.getElementById('streamInput');
+      const text = input.value.trim();
+
+      // Inline feedback on empty input
+      if (!text) {
+        input.classList.add('input-error');
+        showToast("Please enter a chat message to process.", "warning");
+        return;
+      }
+      input.classList.remove('input-error');
+
+      const apiKey = getApiKey();
+      const headers = { "Content-Type": "application/json" };
+      if (apiKey) {
+        headers["X-API-Key"] = apiKey;
+      } else {
+        headers["X-Client-Token"] = "cp_ingest_6b91c28f4e";
+      }
+
+      try {
+        const res = await fetch("/ingest", {
+          method: "POST",
+          headers: headers,
+          body: JSON.stringify({ sender_id: "+919811100000", text })
+        });
+        
+        if (!res.ok) {
+          showToast(`Ingest failed (${res.status}): ${res.statusText}`, "error");
+          return;
+        }
+
+        const payload = await res.json();
+        const r = payload.result;
+
+        const box = document.getElementById('streamResultBox');
+        box.style.display = "flex";
+
+        const pill = document.getElementById('streamActionPill');
+        pill.textContent = r.action;
+        pill.className = "verdict-pill";
+
+        if (r.action === "NEEDS_REVIEW") {
+          pill.classList.add(
+            r.status === "UNVERIFIED_URGENT_PENDING" || r.status === "CONFLICTING_URGENT_PENDING"
+              ? "pill-urgent"
+              : "pill-pending"
+          );
+          let msg;
+          if (r.status === "UNVERIFIED_URGENT_PENDING" || r.status === "CONFLICTING_URGENT_PENDING") {
+            msg = `Urgent report [${r.urgency_level || 'P1'}] queued for human review. No helpers are contacted before admin approval.`;
+          } else if (r.status === "CONFLICTING_CLAIM_REVIEW") {
+            msg = "This message conflicts with an admin-attested claim. It is queued for review; approving closes the review without contacting helpers.";
+          } else {
+            msg = r.dispatch_allowed
+              ? "Urgent, corroborated report queued for review. Helpers can be contacted only after admin approval."
+              : "Corroborated report queued for review; it does not meet dispatch eligibility checks, so approval will not contact helpers.";
+          }
+          document.getElementById('streamMessageNotice').textContent = msg;
+          showToast("Message queued for human review.", "info");
+        } else if (r.action === "SUPPRESS_TOXIC") {
+          pill.classList.add("pill-toxic");
+          document.getElementById('streamMessageNotice').textContent =
+            "Toxic message suppressed from public feed. Polite civic rewrite generated.";
+          showToast("Toxic comment suppressed & politely rewritten.", "warning");
+        } else if (r.action === "SUPPRESS_PANIC") {
+          pill.classList.add("pill-fake");
+          document.getElementById('streamMessageNotice').textContent =
+            "Contradiction with an admin-attested ledger claim; flagged as a rumour.";
+          showToast("Panic rumour suppressed.", "error");
+        } else {
+          pill.classList.add("pill-rumour");
+          document.getElementById('streamMessageNotice').textContent =
+            "Unverified claim. Retained in silent monitoring without alerting helpers.";
+        }
+
+        document.getElementById('streamScores').textContent =
+          `Tox: ${r.toxicity_score} | Entail: ${r.entailment_score} | Contradict: ${r.contradiction_score}`;
+
+        const cleanBox = document.getElementById('cleanTextDisplay');
+        if (r.clean_text) {
+          cleanBox.style.display = "block";
+          cleanBox.textContent = `✨ Polite Tone Rewrite: "${r.clean_text}"`;
+        } else {
+          cleanBox.style.display = "none";
+        }
+
+        loadPendingIncidents();
+        updateStats();
+      } catch (err) {
+        showToast("Ingest error: " + err, "error");
+      }
+    }
+
+    async function loadPendingIncidents() {
+      try {
+        const apiKey = getApiKey();
+        const headers = apiKey ? { "X-API-Key": apiKey } : {};
+        const res = await fetch("/incidents/pending", { headers });
+        const container = document.getElementById('pendingList');
+        const notice = document.getElementById('noPendingNotice');
+
+        if (res.status === 401) {
+          container.textContent = "";
+          notice.style.display = "block";
+          notice.textContent = "🔒 Enter valid Admin X-API-Key above to inspect pending review incidents.";
+          return;
+        }
+
+        const list = await res.json();
+        container.textContent = "";
+
+        if (!list || list.length === 0) {
+          notice.style.display = "block";
+          notice.textContent = "No incidents are waiting for moderator review.";
+          return;
+        }
+        notice.style.display = "none";
+
+        list.forEach(inc => {
+          const card = document.createElement("div");
+          card.className = "incident-review-card";
+
+          const header = document.createElement("div");
+          header.className = "incident-header";
+          
+          const idSpan = createSafeElement("strong", `[${inc.incident_id}] ${inc.status}`, "");
+          idSpan.style.color = inc.urgency_level === "P1" ? "#f87171" : "#93c5fd";
+          idSpan.style.fontSize = "0.82rem";
+
+          const badge = createSafeElement(
+            "span",
+            inc.urgency_level === "P1"
+              ? "P1 Critical Urgency"
+              : inc.dispatch_allowed !== true
+                ? "Conflict Review — No Dispatch"
+                : "Corroborated Need",
+            "verdict-pill pill-pending"
+          );
+          badge.style.fontSize = "0.68rem";
+
+          header.appendChild(idSpan);
+          header.appendChild(badge);
+
+          const textP = createSafeElement("p", `"${inc.text}"`, "");
+          textP.style.fontSize = "0.82rem";
+          textP.style.color = "#fff";
+
+          const metaP = createSafeElement(
+            "p",
+            inc.dispatch_allowed !== true
+              ? `No helper dispatch on approval | Sender: ${inc.sender_id}`
+              : `Required Capability: ${inc.required_capability || 'general_aid'} | Sender: ${inc.sender_id}`,
+            ""
+          );
+          metaP.style.fontSize = "0.72rem";
+          metaP.style.color = "#94a3b8";
+
+          const actions = document.createElement("div");
+          actions.className = "incident-actions";
+
+          const approveBtn = document.createElement("button");
+          approveBtn.className = "btn-approve";
+          approveBtn.textContent = inc.dispatch_allowed !== true
+            ? "✅ Close Review (No Dispatch)"
+            : "✅ Approve & Contact Helpers";
+          approveBtn.onclick = () => approveIncident(inc.incident_id);
+
+          const rejectBtn = document.createElement("button");
+          rejectBtn.className = "btn-reject";
+          rejectBtn.textContent = "❌ Reject";
+          rejectBtn.onclick = () => rejectIncident(inc.incident_id);
+
+          actions.appendChild(rejectBtn);
+          actions.appendChild(approveBtn);
+
+          card.appendChild(header);
+          card.appendChild(textP);
+          card.appendChild(metaP);
+          card.appendChild(actions);
+
+          container.appendChild(card);
+        });
+      } catch (e) {}
+    }
+
+    async function approveIncident(id) {
+      const apiKey = getApiKey();
+      try {
+        const res = await fetch(`/incidents/${id}/approve`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-API-Key": apiKey
+          },
+          body: JSON.stringify({ moderator_notes: "Approved by society admin" })
+        });
+        if (res.status === 401) {
+          showToast("Authentication Failed: Invalid X-API-Key header.", "error");
+          return;
+        }
+        if (!res.ok) {
+          const error = await res.json().catch(() => ({}));
+          showToast(error.detail || `Approval failed (${res.status}).`, "error");
+          return;
+        }
+        const data = await res.json();
+        const dispatchAllowed = data.incident?.dispatch_allowed === true;
+        const helperCount = data.incident?.dispatched_helpers?.length || 0;
+        showToast(
+          dispatchAllowed
+            ? helperCount > 0
+              ? `Incident ${id} approved. ${helperCount} helper(s) contacted.`
+              : `Incident ${id} approved, but no eligible helpers were found.`
+            : `Review ${id} closed. No helpers contacted.`,
+          "success"
+        );
+
+        const helpersCard = document.getElementById('approvedHelpersCard');
+        const helpersList = document.getElementById('approvedHelpersList');
+        helpersList.textContent = "";
+
+        if (data.incident && data.incident.dispatched_helpers && data.incident.dispatched_helpers.length > 0) {
+          helpersCard.style.display = "block";
+          data.incident.dispatched_helpers.forEach(h => {
+            const item = document.createElement("div");
+            item.className = "helper-item";
+
+            const info = document.createElement("div");
+            info.className = "helper-info";
+            info.appendChild(createSafeElement("h5", `${h.name} (${h.block} - ${h.flat})`, ""));
+            info.appendChild(createSafeElement("p", `Skills: ${h.capabilities.join(", ")} | Tel: ${h.phone}`, ""));
+
+            const dist = createSafeElement("div", `${h.distance_meters}m away`, "helper-dist");
+
+            item.appendChild(info);
+            item.appendChild(dist);
+            helpersList.appendChild(item);
+          });
+        } else {
+          helpersCard.style.display = "none";
+        }
+
+        loadPendingIncidents();
+        updateStats();
+      } catch (err) {
+        showToast("Approval error: " + err, "error");
+      }
+    }
+
+    async function rejectIncident(id) {
+      const apiKey = getApiKey();
+      try {
+        const res = await fetch(`/incidents/${id}/reject`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-API-Key": apiKey
+          },
+          body: JSON.stringify({ moderator_notes: "Rejected by moderator" })
+        });
+        if (res.status === 401) {
+          showToast("Authentication Failed: Invalid X-API-Key header.", "error");
+          return;
+        }
+        if (!res.ok) {
+          const error = await res.json().catch(() => ({}));
+          showToast(error.detail || `Rejection failed (${res.status}).`, "error");
+          return;
+        }
+        showToast(`Incident ${id} rejected.`, "info");
+        loadPendingIncidents();
+        updateStats();
+      } catch (err) {
+        showToast("Reject error: " + err, "error");
+      }
+    }
+
+    async function runRegressionTest(type) {
+      const el = document.getElementById(type === 'exploded' ? 'regressionResultA' : 'regressionResultB');
+      el.textContent = "Running NLI test against synthetic fixture (isolated dry-run)...";
+
+      try {
+        const res = await fetch("/api/test-regression", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-API-Key": getApiKey() },
+          body: JSON.stringify({ scenario: type })
+        });
+        if (!res.ok) {
+          el.textContent = res.status === 401
+            ? "Enter the admin API key to run the protected regression test."
+            : `Regression test failed (${res.status}): ${res.statusText}`;
+          return;
+        }
+        const data = await res.json();
+        const r = data.result;
+
+        el.textContent = "";
+        const badge = createSafeElement("span", `${r.action} (${r.status})`, "verdict-pill");
+        badge.style.display = "inline-block";
+        badge.style.marginBottom = "4px";
+        if (r.action === "SUPPRESS_PANIC") badge.classList.add("pill-fake");
+        else badge.classList.add("pill-pending");
+
+        const scoreP = createSafeElement("p", `Contradiction: ${r.contradiction_score} | Entailment: ${r.entailment_score}`, "");
+        scoreP.style.color = "#93c5fd";
+
+        const matchedP = createSafeElement("p", `Matched against [${r.matched_claim ? r.matched_claim.id : 'None'}] (${r.matched_claim ? r.matched_claim.verifier_status : ''})`, "");
+        matchedP.style.color = "#94a3b8";
+
+        const dryRunTag = createSafeElement("p", "Dry-Run: Active (isolated — 0 records written to incidents.json)", "");
+        dryRunTag.style.fontSize = "0.7rem";
+        dryRunTag.style.color = "#34d399";
+        dryRunTag.style.marginTop = "3px";
+
+        el.appendChild(badge);
+        el.appendChild(scoreP);
+        el.appendChild(matchedP);
+        el.appendChild(dryRunTag);
+      } catch (e) {
+        el.textContent = "Error running test: " + e;
+      }
+    }
+
+    async function updateStats() {
+      try {
+        const res = await fetch("/stats");
+        const s = await res.json();
+        document.getElementById('statNoisePct').textContent = (s.noise_reduction_pct || 0) + "%";
+        document.getElementById('statRumours').textContent = s.rumours_suppressed || 0;
+        document.getElementById('statPendingReviews').textContent = s.pending_reviews || 0;
+        document.getElementById('statApprovedDispatches').textContent = s.approved_dispatches || 0;
+      } catch (e) {}
+    }
+
+    async function loadClaims() {
+      try {
+        const includeResolved = document.getElementById('showResolvedToggle').checked;
+        const res = await fetch(`/claims?include_resolved=${includeResolved}`);
+        const claims = await res.json();
+        const list = document.getElementById('claimsList');
+        list.textContent = "";
+
+        claims.forEach(c => {
+          const item = document.createElement("div");
+          item.className = "helper-item";
+
+          const info = document.createElement("div");
+          info.className = "helper-info";
+
+          const headerDiv = document.createElement("div");
+          headerDiv.style.display = "flex";
+          headerDiv.style.alignItems = "center";
+          headerDiv.style.gap = "8px";
+
+          const statusClass = c.status === "ACTIVE" ? "status-active" : (c.status === "RESOLVED" ? "status-resolved" : "status-expired");
+          const tag = createSafeElement("span", c.status, `status-tag ${statusClass}`);
+          const title = createSafeElement("h5", `[${c.id}] ${c.category}`, "");
+
+          headerDiv.appendChild(tag);
+          headerDiv.appendChild(title);
+
+          const text = createSafeElement("p", c.text, "");
+          const meta = createSafeElement("p", `Verifier listed by admin: ${c.verifier_identity} (${c.verifier_status})`, "");
+          meta.style.fontSize = "0.7rem";
+          meta.style.color = "#60a5fa";
+
+          info.appendChild(headerDiv);
+          info.appendChild(text);
+          info.appendChild(meta);
+
+          if (c.source_links && c.source_links.length > 0) {
+            const sourcesDiv = document.createElement("div");
+            sourcesDiv.style.marginTop = "2px";
+            sourcesDiv.style.fontSize = "0.7rem";
+            sourcesDiv.style.color = "#94a3b8";
+            sourcesDiv.textContent = `Submitted source links (not checked): ${c.source_links.join(", ")}`;
+            info.appendChild(sourcesDiv);
+          }
+
+          const actionsDiv = document.createElement("div");
+          actionsDiv.style.display = "flex";
+          actionsDiv.style.gap = "6px";
+
+          if (c.status === "ACTIVE") {
+            const resolveBtn = document.createElement("button");
+            resolveBtn.className = "btn-resolve";
+            resolveBtn.textContent = "Resolve";
+            resolveBtn.onclick = () => resolveClaim(c.id);
+            actionsDiv.appendChild(resolveBtn);
+
+            const deleteBtn = document.createElement("button");
+            deleteBtn.className = "btn-delete";
+            deleteBtn.textContent = "Expire";
+            deleteBtn.onclick = () => expireClaim(c.id);
+            actionsDiv.appendChild(deleteBtn);
+          }
+
+          item.appendChild(info);
+          item.appendChild(actionsDiv);
+          list.appendChild(item);
+        });
+      } catch (e) {}
+    }
+
+    async function resolveClaim(id) {
+      const apiKey = getApiKey();
+      try {
+        const res = await fetch(`/claims/${id}/resolve`, {
+          method: "PATCH",
+          headers: { "X-API-Key": apiKey }
+        });
+        if (res.status === 401) {
+          showToast("Authentication Failed: Invalid X-API-Key.", "error");
+          return;
+        }
+        showToast(`Claim ${id} marked as RESOLVED (excluded from active matching).`, "success");
+        loadClaims();
+      } catch (e) {
+        showToast("Error resolving claim: " + e, "error");
+      }
+    }
+
+    async function expireClaim(id) {
+      const apiKey = getApiKey();
+      try {
+        const res = await fetch(`/claims/${id}`, {
+          method: "DELETE",
+          headers: { "X-API-Key": apiKey }
+        });
+        if (res.status === 401) {
+          showToast("Authentication Failed: Invalid X-API-Key.", "error");
+          return;
+        }
+        showToast(`Claim ${id} expired.`, "info");
+        loadClaims();
+      } catch (e) {
+        showToast("Error expiring claim: " + e, "error");
+      }
+    }
+
+    async function addClaimSecure() {
+      const textInput = document.getElementById('newClaimInput');
+      const verifierInput = document.getElementById('newClaimVerifier');
+      const sourcesInput = document.getElementById('newClaimSources');
+
+      const text = textInput.value.trim();
+      const category = document.getElementById('newClaimCategory').value;
+      const verifier = verifierInput.value.trim();
+      const verifierStatus = document.getElementById('newClaimVerifierStatus').value;
+      const witnessCount = Number(document.getElementById('newClaimWitnessCount').value);
+      const sourcesRaw = sourcesInput.value.trim();
+      const sources = sourcesRaw ? sourcesRaw.split(",").map(s => s.trim()) : [];
+      const apiKey = getApiKey();
+
+      // Inline validation
+      let hasError = false;
+      if (!text || text.length < 10) {
+        textInput.classList.add('input-error');
+        hasError = true;
+      } else {
+        textInput.classList.remove('input-error');
+      }
+
+      if (!verifier) {
+        verifierInput.classList.add('input-error');
+        hasError = true;
+      } else {
+        verifierInput.classList.remove('input-error');
+      }
+
+      if (sources.length === 0) {
+        sourcesInput.classList.add('input-error');
+        hasError = true;
+      } else {
+        sourcesInput.classList.remove('input-error');
+      }
+
+      if (!Number.isInteger(witnessCount) || witnessCount < 1 || witnessCount > 1000 ||
+          (verifierStatus === "COMMUNITY_WITNESSED" && witnessCount < 2)) {
+        showToast("Use 2 or more witnesses for a community-witnessed claim.", "warning");
+        return;
+      }
+
+      if (hasError) {
+        showToast("Please provide claim text (min 10 chars), verifier identity, and at least 1 source link.", "warning");
+        return;
+      }
+
+      try {
+        const res = await fetch("/claims", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-API-Key": apiKey
+          },
+          body: JSON.stringify({
+            text,
+            category,
+            source_links: sources,
+            verifier_identity: verifier,
+            verifier_status: verifierStatus,
+            witness_count: witnessCount
+          })
+        });
+
+        if (res.status === 401) {
+          showToast("Authentication Failed: Invalid X-API-Key header.", "error");
+          return;
+        }
+
+        if (!res.ok) {
+          showToast(`Error creating claim: ${res.statusText}`, "error");
+          return;
+        }
+
+        textInput.value = "";
+        verifierInput.value = "";
+        sourcesInput.value = "";
+        showToast("Claim added to the ledger. Verification status is admin-supplied.", "success");
+        loadClaims();
+      } catch (err) {
+        showToast("Error adding claim: " + err, "error");
+      }
+    }
+
+    async function loadAuditLog() {
+      const list = document.getElementById('auditLogList');
+      if (!list) return;
+      const apiKey = getApiKey();
+      try {
+        const res = await fetch("/audit-log", {
+          headers: apiKey ? { "X-API-Key": apiKey } : {}
+        });
+        if (res.status === 401) {
+          list.textContent = "🔒 Enter valid Admin X-API-Key above to inspect immutable security audit logs.";
+          return;
+        }
+        const logs = await res.json();
+        list.textContent = "";
+        if (!logs || logs.length === 0) {
+          list.textContent = "Audit log is empty.";
+          return;
+        }
+        logs.slice(-20).reverse().forEach(entry => {
+          const row = document.createElement("div");
+          row.style.padding = "6px 0";
+          row.style.borderBottom = "1px solid rgba(255,255,255,0.06)";
+          row.style.fontSize = "0.73rem";
+
+          const timeSpan = createSafeElement("span", `[${new Date(entry.timestamp).toLocaleTimeString()}] `, "");
+          timeSpan.style.color = "#60a5fa";
+
+          const actionSpan = createSafeElement("strong", `${entry.action} `, "");
+          actionSpan.style.color = "#f3f4f6";
+
+          const actorSpan = createSafeElement("span", `by ${entry.actor}: `, "");
+          actorSpan.style.color = "#cbd5e1";
+
+          const detailSpan = createSafeElement("span", entry.details || "", "");
+          detailSpan.style.color = "#94a3b8";
+
+          row.appendChild(timeSpan);
+          row.appendChild(actionSpan);
+          row.appendChild(actorSpan);
+          row.appendChild(detailSpan);
+          list.appendChild(row);
+        });
+      } catch (e) {
+        list.textContent = "Error loading audit log: " + e;
+      }
+    }
+
+    // Initialize
+    initApiKey();
+    updateStats();
+    loadClaims();
+    loadPendingIncidents();
+    loadAuditLog();
+  </script>
+</body>
+</html>

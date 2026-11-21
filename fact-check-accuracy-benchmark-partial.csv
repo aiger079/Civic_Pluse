@@ -1,0 +1,4 @@
+"test","expected","predicted","verdict","evidence_status","correct","source_count","sources","claim","summary"
+"1","T","ABSTAIN","INSUFFICIENT_EVIDENCE","SEARCH_UNAVAILABLE","False","0","","The Eiffel Tower is located in Paris, France.","Live web search could not be completed."
+"2","T","ABSTAIN","INSUFFICIENT_EVIDENCE","SEARCH_UNAVAILABLE","False","0","","Canberra is the capital city of Australia.","Live web search could not be completed."
+"3","T","ABSTAIN","INSUFFICIENT_EVIDENCE","SEARCH_UNAVAILABLE","False","0","","Ottawa is the capital city of Canada.","Live web search could not be completed."
