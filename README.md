@@ -30,7 +30,7 @@ The unpacked extension source is in `extension/`. The landing page links to `Civ
 
 Automatic visible-claim scanning is enabled by default. It sends only visible text snippets and the current site domain to the backend, checks at a limited pace, and marks claims red only when live search returned sources and the assessment verdict is `FABRICATED_HOAX` or `DISPUTED_RUMOUR`. This is a preliminary AI flag, not a confirmed fact; users can disable automatic scanning in the popup.
 
-Google Search grounding with Gemini 3.8 Flash requires a Gemini project with eligible billing and available search quota. If Google Search fails or returns no usable sources, a manual check in extension 1.2.1 or later can look up a public topic in English Wikipedia and assess the retrieved excerpts. Only the public topic is sent to Wikipedia. This fallback has limited coverage and automatic scanning still requires live search.
+Google Search grounding with Gemini 3.8 Flash requires a Gemini project with eligible billing and available search quota. When Google Search fails or returns no usable sources, a manual check in extension 1.2.2 can use Tavily to search the web and Gemini to assess the returned excerpts. Tavily receives a short query about the public claim without the current site domain. Keyless Tavily access is rate limited. Set `TAVILY_API_KEY` as a server environment secret for a dedicated quota. If Tavily is unavailable, manual checks can still use Wikipedia for public encyclopedia topics. Automatic scanning uses the configured Gemini or Groq search provider.
 
 ## Local backend
 

@@ -67,7 +67,8 @@ document.addEventListener("DOMContentLoaded", () => {
         body: JSON.stringify({
           text,
           context: "chrome_popup",
-          allow_public_reference_search: true
+          allow_public_reference_search: true,
+          allow_web_search: true
         })
       });
       const data = await res.json().catch(() => ({}));
@@ -100,21 +101,23 @@ document.addEventListener("DOMContentLoaded", () => {
         : "";
 
       if (evidence) {
-        resultSummary.innerText = [a.summary, a.explanation, evidence.advice]
+        const details = evidence.message ? [evidence.message] : [a.summary, a.explanation];
+        resultSummary.innerText = [...details, evidence.advice]
           .filter(Boolean).join("\n\n");
       } else {
         resultSummary.innerText = [a.summary || a.explanation, "Review the evidence before relying on this preliminary assessment."]
           .filter(Boolean).join("\n\n");
       }
 
-      if (Array.isArray(a.sources) && a.sources.length > 0) {
+      const sourceList = getCivicPulseSourceList(a);
+      if (sourceList.links.length > 0) {
         sourcesContainer.style.display = "block";
         sourcesContainer.textContent = "";
         const titleSpan = document.createElement("strong");
-        titleSpan.textContent = `📑 ${labelCivicPulseSources(a)}: `;
+        titleSpan.textContent = `📑 ${sourceList.label}: `;
         sourcesContainer.appendChild(titleSpan);
 
-        a.sources.forEach((s, idx) => {
+        sourceList.links.forEach((s, idx) => {
           let safeUrl;
           try {
             const parsed = new URL(s.url);

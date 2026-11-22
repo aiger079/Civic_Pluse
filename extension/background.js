@@ -98,7 +98,8 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
         body: JSON.stringify({
           text: selectedText,
           context: pageDomain(tab.url),
-          allow_public_reference_search: true
+          allow_public_reference_search: true,
+          allow_web_search: true
         })
       });
 

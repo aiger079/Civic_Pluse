@@ -285,6 +285,7 @@ class FactCheckRequest(BaseModel):
     text: str = Field(..., min_length=5, max_length=1500)
     context: Optional[str] = Field(default="social_media_selection", max_length=200)
     allow_public_reference_search: bool = False
+    allow_web_search: bool = False
 
 class IncidentReviewAction(BaseModel):
     moderator_notes: str = Field(default="Approved by authenticated admin", min_length=3, max_length=300)
@@ -508,7 +509,9 @@ def fact_check(req: FactCheckRequest, request: Request):
 
     telemetry["fact_checks"] += 1
     result = engine.fact_check_text(
-        req.text, req.context, allow_public_reference_search=req.allow_public_reference_search,
+        req.text, req.context,
+        allow_public_reference_search=req.allow_public_reference_search,
+        allow_web_search=req.allow_web_search,
     )
     if result.get("falsehood_score", 0) >= 0.65 or result.get("verdict") in ["FABRICATED_HOAX", "DISPUTED_RUMOUR"]:
         telemetry["fact_check_flags"] += 1

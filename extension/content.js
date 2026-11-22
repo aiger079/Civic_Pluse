@@ -65,7 +65,7 @@
     privacyHeading.textContent = "🔒 Data disclosure";
     privacyNote.append(
       privacyHeading,
-      ` CivicPulse sends the selected text and site domain (${domain}) to its backend. The configured provider (Google Gemini or Groq) may receive that information. If Google Search is unavailable, Gemini may identify a public topic to look up in Wikipedia. Wikipedia receives the topic only. CivicPulse does not send cookies, logins, or browsing history.`
+      ` CivicPulse sends the selected text and site domain (${domain}) to its backend. The configured provider (Google Gemini or Groq) may receive that information. If Google Search fails or finds no usable sources, CivicPulse may send a short public search query to Tavily or a public topic to Wikipedia. Neither receives the site domain. CivicPulse does not send cookies, logins, or browsing history.`
     );
 
     const quoteEl = document.createElement("p");
@@ -162,7 +162,8 @@
 
     const truthEstimate = a.model_estimate?.truth_score ?? a.truth_score;
     const falseEstimate = a.model_estimate?.falsehood_score ?? a.falsehood_score;
-    if (hasVerdict && a.provider_used !== "wikimedia" && Number.isFinite(truthEstimate) && Number.isFinite(falseEstimate)) {
+    const assessedExcerpts = a.provider_used === "wikimedia" || a.provider_used === "tavily";
+    if (hasVerdict && !assessedExcerpts && Number.isFinite(truthEstimate) && Number.isFinite(falseEstimate)) {
       const truthPct = Math.round(Math.max(0, Math.min(1, truthEstimate)) * 100);
       const falsePct = Math.round(Math.max(0, Math.min(1, falseEstimate)) * 100);
       const meters = document.createElement("div");
@@ -189,21 +190,22 @@
     // Summary & Explanation (Rendered safely via textContent)
     const summaryEl = document.createElement("div");
     summaryEl.className = "civicpulse-summary";
-    summaryEl.textContent = a.summary || (verdict ? "" : "CivicPulse returned an incomplete response. Try again in a moment.");
+    summaryEl.textContent = evidence?.message || a.summary || (verdict ? "" : "CivicPulse returned an incomplete response. Try again in a moment.");
     if (summaryEl.textContent) body.appendChild(summaryEl);
 
     const explanationEl = document.createElement("div");
     explanationEl.className = "civicpulse-explanation";
-    explanationEl.textContent = a.explanation || "";
+    explanationEl.textContent = evidence?.message ? "" : a.explanation || "";
     if (explanationEl.textContent) body.appendChild(explanationEl);
 
     // Sources & Citations
-    if (Array.isArray(a.sources) && a.sources.length > 0) {
+    const sourceList = getCivicPulseSourceList(a);
+    if (sourceList.links.length > 0) {
       const sourcesBox = document.createElement("div");
       sourcesBox.className = "civicpulse-sources-box";
       
       const sourcesHeading = document.createElement("h5");
-      sourcesHeading.textContent = `📑 ${labelCivicPulseSources(a)}:`;
+      sourcesHeading.textContent = `📑 ${sourceList.label}:`;
       sourcesHeading.style.fontSize = "11.5px";
       sourcesHeading.style.color = "#93c5fd";
       sourcesHeading.style.marginBottom = "6px";
@@ -213,7 +215,7 @@
       sourcesList.style.listStyle = "none";
       sourcesList.style.padding = "0";
 
-      for (const s of a.sources) {
+      for (const s of sourceList.links) {
         let safeUrl;
         try {
           const parsed = new URL(s.url);
