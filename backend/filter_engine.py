@@ -252,13 +252,28 @@ class DualGateEngine:
         print("Initializing CivicPulse Dual-Gate AI Engine (Safe Routing & Calibrated Verification)...")
         
         # Load environment variables strictly without hardcoded fallback credentials
+        self.openrouter_api_key = (os.getenv("OPENROUTER_API_KEY") or "").strip()
         self.groq_api_key = (os.getenv("GROQ_API_KEY") or "").strip()
         self.gemini_api_key = (os.getenv("GEMINI_API_KEY") or "").strip()
         self.tavily_api_key = (os.getenv("TAVILY_API_KEY") or "").strip()
-        if not self.groq_api_key and not self.gemini_api_key:
+        if not self.openrouter_api_key and not self.groq_api_key and not self.gemini_api_key:
             raise RuntimeError(
-                "Missing live-search provider key. Configure GEMINI_API_KEY or GROQ_API_KEY."
+                "Missing AI provider key. Configure OPENROUTER_API_KEY, GEMINI_API_KEY, or GROQ_API_KEY."
             )
+        self.openrouter_model = os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini")
+        self.ai_provider = (
+            os.getenv("CIVICPULSE_AI_PROVIDER") or
+            ("openrouter" if self.openrouter_api_key else "gemini" if self.gemini_api_key else "groq")
+        ).strip().lower()
+        if self.ai_provider not in {"openrouter", "gemini", "groq"}:
+            raise RuntimeError("CIVICPULSE_AI_PROVIDER must be 'openrouter', 'gemini', or 'groq'.")
+        if self.ai_provider == "openrouter" and not self.openrouter_api_key:
+            raise RuntimeError("CIVICPULSE_AI_PROVIDER=openrouter requires OPENROUTER_API_KEY.")
+        self.openrouter_client = bool(self.openrouter_api_key)
+        if self.ai_provider == "gemini" and not self.gemini_api_key:
+            raise RuntimeError("CIVICPULSE_AI_PROVIDER=gemini requires GEMINI_API_KEY.")
+        if self.ai_provider == "groq" and not self.groq_api_key:
+            raise RuntimeError("CIVICPULSE_AI_PROVIDER=groq requires GROQ_API_KEY.")
         self.groq_model = os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b")
         # Groq's built-in browser search only supports GPT-OSS models; keep the
         # existing Qwen model for other tasks and use this model for fact-checking.
@@ -266,10 +281,12 @@ class DualGateEngine:
         self.gemini_fact_check_model = os.getenv("GEMINI_FACT_CHECK_MODEL", "gemini-3.8-flash")
         self.fact_check_provider = (
             os.getenv("CIVICPULSE_FACT_CHECK_PROVIDER") or
-            ("gemini" if self.gemini_api_key else "groq")
+            self.ai_provider
         ).strip().lower()
-        if self.fact_check_provider not in {"gemini", "groq"}:
-            raise RuntimeError("CIVICPULSE_FACT_CHECK_PROVIDER must be 'gemini' or 'groq'.")
+        if self.fact_check_provider not in {"gemini", "groq", "openrouter"}:
+            raise RuntimeError("CIVICPULSE_FACT_CHECK_PROVIDER must be 'gemini', 'groq', or 'openrouter'.")
+        if self.fact_check_provider == "openrouter" and not self.openrouter_client:
+            raise RuntimeError("CIVICPULSE_FACT_CHECK_PROVIDER=openrouter requires OPENROUTER_API_KEY.")
         if self.fact_check_provider == "gemini" and not self.gemini_api_key:
             raise RuntimeError("CIVICPULSE_FACT_CHECK_PROVIDER=gemini requires GEMINI_API_KEY.")
         if self.fact_check_provider == "groq" and not self.groq_api_key:
@@ -294,6 +311,7 @@ class DualGateEngine:
             except Exception as e:
                 print(f"Optional Groq client unavailable: {type(e).__name__}")
         print(f"Fact-check provider: {self.fact_check_provider}")
+        print(f"AI provider: {self.ai_provider}")
         print(f"Gemini search: {'configured' if self.gemini_api_key else 'not configured'}")
 
         # Local HF Model placeholders
@@ -375,7 +393,7 @@ class DualGateEngine:
         )
 
         # Groq is optional. Gemini is used when Groq is absent or unavailable.
-        if self.groq_client:
+        if self.groq_client and self.ai_provider == "groq":
             try:
                 res = self.groq_client.chat.completions.create(
                     model=self.groq_model,
@@ -389,9 +407,9 @@ class DualGateEngine:
             except Exception:
                 pass
 
-        if self.gemini_api_key:
+        if self.ai_provider in {"gemini", "openrouter"}:
             try:
-                data = _parse_model_json(self._request_gemini_text(prompt))
+                data = _parse_model_json(self._request_ai_text(prompt))
                 return _bounded_score(data.get("toxicity_score", 0.0), 0.0)
             except Exception as error:
                 print(f"Gemini toxicity classification failed: {type(error).__name__}")
@@ -441,7 +459,7 @@ Output JSON:
 }}"""
 
         # Use an LLM only for subtle cases that the fast safety heuristics missed.
-        if self.groq_client:
+        if self.groq_client and self.ai_provider == "groq":
             try:
                 res = self.groq_client.chat.completions.create(
                     model=self.groq_model,
@@ -470,9 +488,9 @@ Output JSON:
             except Exception:
                 pass
 
-        if self.gemini_api_key:
+        if self.ai_provider in {"gemini", "openrouter"}:
             try:
-                data = _parse_model_json(self._request_gemini_text(prompt))
+                data = _parse_model_json(self._request_ai_text(prompt))
                 level = data.get("urgency_level")
                 capability = data.get("required_capability")
                 if data.get("is_urgent") is True and level in {"P1", "P2"} and capability in ROUTABLE_CAPABILITIES:
@@ -537,7 +555,7 @@ Respond with a compact JSON object:
 Constraints: entailment + contradiction + neutral must sum to 1.0."""
 
         # Cross-lingual NLI uses Gemini when no working local/Groq inference is available.
-        if self.groq_client:
+        if self.groq_client and self.ai_provider == "groq":
             try:
                 res = self.groq_client.chat.completions.create(
                     model=self.groq_model,
@@ -556,9 +574,9 @@ Constraints: entailment + contradiction + neutral must sum to 1.0."""
             except Exception as err:
                 print(f"Groq NLI error: {type(err).__name__}")
 
-        if self.gemini_api_key:
+        if self.ai_provider in {"gemini", "openrouter"}:
             try:
-                data = _parse_model_json(self._request_gemini_text(prompt))
+                data = _parse_model_json(self._request_ai_text(prompt))
                 return _normalized_nli_scores(
                     data.get("contradiction", 0.0),
                     data.get("neutral", 0.0),
@@ -583,7 +601,7 @@ Constraints: entailment + contradiction + neutral must sum to 1.0."""
 Original: "{toxic_text}"
 Polite Rewrite:"""
 
-        if self.groq_client:
+        if self.groq_client and self.ai_provider == "groq":
             try:
                 response = self.groq_client.chat.completions.create(
                     model=self.groq_model,
@@ -595,9 +613,9 @@ Polite Rewrite:"""
             except Exception:
                 pass
 
-        if self.gemini_api_key:
+        if self.ai_provider in {"gemini", "openrouter"}:
             try:
-                return self._request_gemini_text(prompt).strip().replace('"', '')[:500]
+                return self._request_ai_text(prompt).strip().replace('"', '')[:500]
             except Exception as error:
                 print(f"Gemini rewrite failed: {type(error).__name__}")
         return "Civic reminder: Please keep shared areas clean and courteous."
@@ -649,6 +667,53 @@ Polite Rewrite:"""
             raise ValueError("Gemini returned no model output text")
         return output
 
+    def _request_openrouter_text(self, prompt: str, *, reference_assessment: bool = False) -> str:
+        if not self.openrouter_client:
+            raise RuntimeError("OpenRouter API is not configured")
+        body = {
+            "model": os.getenv(
+                "OPENROUTER_REFERENCE_MODEL" if reference_assessment else "OPENROUTER_MODEL",
+                os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini"),
+            ),
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0,
+            "max_tokens": 1200 if not reference_assessment else 600,
+            "response_format": {"type": "json_object"},
+        }
+        request = UrlRequest(
+            "https://openrouter.ai/api/v1/chat/completions",
+            data=json.dumps(body).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {self.openrouter_api_key}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": os.getenv("OPENROUTER_SITE_URL", "https://civic-pluse-sooty.vercel.app"),
+                "X-Title": "CivicPulse",
+            },
+            method="POST",
+        )
+        with urlopen(request, timeout=max(5, int(os.getenv("OPENROUTER_TIMEOUT_SECONDS", "45")))) as response:
+            result = json.loads(response.read().decode("utf-8"))
+        content = result["choices"][0]["message"].get("content")
+        if not isinstance(content, str) or not content.strip():
+            raise ValueError("OpenRouter returned no text content")
+        return content.strip()
+
+    def _request_ai_text(self, prompt: str, *, reference_assessment: bool = False) -> str:
+        if self.ai_provider == "openrouter":
+            return self._request_openrouter_text(prompt, reference_assessment=reference_assessment)
+        if self.ai_provider == "gemini":
+            return self._request_gemini_text(prompt, reference_assessment=reference_assessment)
+        if self.groq_client and self.ai_provider == "groq":
+            response = self.groq_client.chat.completions.create(
+                model=self.groq_model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0,
+                response_format={"type": "json_object"},
+                max_tokens=1200 if not reference_assessment else 600,
+            )
+            return response.choices[0].message.content
+        raise RuntimeError("No AI text provider is available")
+
     def _request_gemini_grounded_fact_check(self, prompt: str):
         result = self._request_gemini_interaction(
             prompt, tools=[{"type": "google_search"}]
@@ -666,7 +731,7 @@ Polite Rewrite:"""
             f"Claim JSON string: {json.dumps(claim, ensure_ascii=False)}"
         )
         topic = _parse_model_json(
-            self._request_gemini_text(query_prompt, reference_assessment=True)
+            self._request_ai_text(query_prompt, reference_assessment=True)
         ).get("topic")
         if not isinstance(topic, str):
             return {}, [], False
@@ -721,7 +786,7 @@ Polite Rewrite:"""
             f"Claim JSON string: {json.dumps(claim, ensure_ascii=False)}"
         )
         query = _parse_model_json(
-            self._request_gemini_text(query_prompt, reference_assessment=True)
+            self._request_ai_text(query_prompt, reference_assessment=True)
         ).get("query")
         if not isinstance(query, str):
             return {}, [], False
@@ -735,16 +800,18 @@ Polite Rewrite:"""
             return {}, [], False
 
         headers = {"Content-Type": "application/json"}
+        search_payload = {
+            "query": query, "topic": "general", "search_depth": "basic", "max_results": 5,
+            "include_answer": False, "include_raw_content": False, "auto_parameters": False,
+        }
         if self.tavily_api_key:
             headers["Authorization"] = f"Bearer {self.tavily_api_key}"
+            search_payload["api_key"] = self.tavily_api_key
         else:
             headers["X-Tavily-Access-Mode"] = "keyless"
         request = UrlRequest(
             "https://api.tavily.com/search",
-            data=json.dumps({
-                "query": query, "topic": "general", "search_depth": "basic", "max_results": 5,
-                "include_answer": False, "include_raw_content": False, "auto_parameters": False,
-            }).encode("utf-8"),
+            data=json.dumps(search_payload).encode("utf-8"),
             headers=headers,
             method="POST",
         )
@@ -800,7 +867,7 @@ Polite Rewrite:"""
             f"Claim JSON string: {json.dumps(claim, ensure_ascii=False)}\n"
             f"Retrieved excerpts: {json.dumps(passages, ensure_ascii=False)}"
         )
-        data = _parse_model_json(self._request_gemini_text(assessment_prompt, reference_assessment=True))
+        data = _parse_model_json(self._request_ai_text(assessment_prompt, reference_assessment=True))
         evidence = data.get("evidence")
         if not isinstance(evidence, list):
             return {}, [], True
@@ -826,7 +893,7 @@ Polite Rewrite:"""
         allow_public_reference_search: bool = False, allow_web_search: bool = False,
     ) -> Dict[str, Any]:
         """Search-grounded fact-check with the selected provider and live citations."""
-        if not self.groq_client and not self.gemini_api_key:
+        if not self.groq_client and not self.gemini_api_key and not self.openrouter_client:
             return {
                 "verdict": "INSUFFICIENT_EVIDENCE",
                 "truth_score": 0.50,
@@ -879,11 +946,13 @@ Return one JSON object only (no Markdown):
         provider_used: Optional[str] = None
         groq_error: Optional[Exception] = None
         gemini_error: Optional[Exception] = None
+        openrouter_error: Optional[Exception] = None
         search_performed = False
 
         gemini_is_primary = self.fact_check_provider == "gemini"
+        openrouter_is_primary = self.fact_check_provider == "openrouter"
         cooling_down = time.monotonic() < self._groq_cooldown_until
-        if not gemini_is_primary and self.groq_client and not cooling_down:
+        if not gemini_is_primary and not openrouter_is_primary and self.groq_client and not cooling_down:
             try:
                 response = self.groq_client.chat.completions.create(
                     model=self.fact_check_model,
@@ -912,7 +981,7 @@ Return one JSON object only (no Markdown):
 
         # Gemini can be the selected primary provider, or the fallback when Groq
         # is primary but unavailable or returns no usable citations.
-        if self.gemini_api_key and (gemini_is_primary or not sources):
+        if self.gemini_api_key and (gemini_is_primary or (not openrouter_is_primary and not sources)):
             if time.monotonic() < self._gemini_search_cooldown_until:
                 gemini_error = RuntimeError("Gemini Search is in rate-limit cooldown")
             else:
@@ -929,8 +998,75 @@ Return one JSON object only (no Markdown):
                         cooldown = _retry_after_seconds(error, default_seconds=120)
                         self._gemini_search_cooldown_until = time.monotonic() + cooldown
 
+        # OpenRouter supplies the model; Tavily supplies independently retrieved evidence.
+        if openrouter_is_primary and allow_web_search:
+            try:
+                query_prompt = (
+                    'Return JSON {"query":"..."} with a focused 3-12 word query for this public claim. '
+                    'Return {"query":null} for private details or allegations. Do not include URLs or identifiers. '
+                    f"Claim JSON string: {json.dumps(text, ensure_ascii=False)}"
+                )
+                query = _parse_model_json(self._request_ai_text(query_prompt, reference_assessment=True)).get("query")
+                query_for_validation = re.sub(r"(?<=\d)\.(?=\d)", "", query) if isinstance(query, str) else ""
+                if (
+                    isinstance(query, str) and len(query) <= 120
+                    and 3 <= len(query.split()) <= 12
+                    and re.fullmatch(r"[^\W_][\w' -]{4,119}", query_for_validation)
+                    and not re.search(r"\d(?:[ -]*\d){6,}", query_for_validation)
+                ):
+                    headers = {"Content-Type": "application/json"}
+                    search_payload = {
+                        "query": query, "topic": "news", "search_depth": "basic", "max_results": 5,
+                        "include_answer": False, "include_raw_content": False
+                    }
+                    if self.tavily_api_key:
+                        headers["Authorization"] = f"Bearer {self.tavily_api_key}"
+                        search_payload["api_key"] = self.tavily_api_key
+                    else:
+                        headers["X-Tavily-Access-Mode"] = "keyless"
+                    request = UrlRequest(
+                        "https://api.tavily.com/search",
+                        data=json.dumps(search_payload).encode("utf-8"),
+                        headers=headers, method="POST",
+                    )
+                    with urlopen(request, timeout=8) as response:
+                        search_results = json.load(response).get("results", [])
+                    excerpts = []
+                    for item in search_results[:5] if isinstance(search_results, list) else []:
+                        if not isinstance(item, dict) or not isinstance(item.get("url"), str):
+                            continue
+                        title = str(item.get("title") or "Search result")[:200]
+                        url = item["url"]
+                        if not url.startswith("https://"):
+                            continue
+                        excerpt = " ".join(str(item.get("content") or "").split())[:1200]
+                        if excerpt:
+                            excerpts.append({"id": len(excerpts) + 1, "title": title, "url": url, "excerpt": excerpt})
+                    if excerpts:
+                        assessment = (
+                            "Assess the claim using ONLY the retrieved excerpts. Do not invent facts or URLs. "
+                            "If evidence is weak or conflicting, use INSUFFICIENT_EVIDENCE. Return JSON with verdict "
+                            "(VERIFIED_TRUE, DISPUTED_RUMOUR, INSUFFICIENT_EVIDENCE, OUT_OF_CONTEXT, or FABRICATED_HOAX), "
+                            "summary, explanation, confidence (0-1), and evidence [{id, quote}]. Quote exact text. "
+                            f"Claim: {json.dumps(text, ensure_ascii=False)}\nExcerpts: {json.dumps(excerpts, ensure_ascii=False)}"
+                        )
+                        data = _parse_model_json(self._request_ai_text(assessment, reference_assessment=True))
+                        sources = []
+                        for item in data.get("evidence", []) if isinstance(data.get("evidence"), list) else []:
+                            if isinstance(item, dict) and isinstance(item.get("id"), int) and isinstance(item.get("quote"), str):
+                                excerpt = " ".join(item["quote"].split())
+                                match = next((src for src in excerpts if src["id"] == item["id"]), None)
+                                if match and len(excerpt) >= 20 and excerpt in match["excerpt"]:
+                                    sources.append({"title": match["title"], "url": match["url"], "type": "reference"})
+                        if sources:
+                            provider_used = "openrouter+tavily"
+                            search_performed = True
+            except (OSError, ValueError, RuntimeError) as error:
+                openrouter_error = error
+                print(f"OpenRouter/Tavily fact-check failed: {type(error).__name__}")
+
         if (
-            self.gemini_api_key and allow_web_search
+            self.gemini_api_key and not openrouter_is_primary and allow_web_search
             and not sources and time.monotonic() >= self._tavily_cooldown_until
         ):
             try:
@@ -958,13 +1094,15 @@ Return one JSON object only (no Markdown):
                 print(f"Wikipedia fallback failed: {type(error).__name__} (HTTP {getattr(error, 'code', 'n/a')})")
 
         if not sources:
-            search_failed = gemini_error is not None or (
+            search_failed = openrouter_error is not None or gemini_error is not None or (
                 groq_error is not None and not search_performed
             )
             if search_failed:
                 evidence_status = "SEARCH_UNAVAILABLE"
                 if gemini_is_primary and gemini_error is not None:
                     explanation = "CivicPulse could not reach a search provider for this claim. Try again later or consult a primary source."
+                elif openrouter_is_primary and openrouter_error is not None:
+                    explanation = "CivicPulse could not complete OpenRouter model or web search. Check the OpenRouter key, model access, Tavily availability, and quota."
                 elif not self.gemini_api_key and groq_error is not None:
                     explanation = "Groq search was unavailable and the Gemini fallback is not configured. Add a rotated GEMINI_API_KEY to enable automatic fallback."
                 elif groq_error is not None and gemini_error is not None:

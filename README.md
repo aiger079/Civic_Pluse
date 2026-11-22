@@ -1,6 +1,6 @@
 # CivicPulse AI Engine Lab
 
-CivicPulse is a FastAPI backend and Chrome extension for evidence-grounded fact checking. The extension calls the backend's `/api/fact-check` endpoint; Gemini can run as the primary provider for live search and the other AI-assisted triage tasks. When Gemini is selected, Groq is ignored even if a legacy Groq secret remains stored.
+CivicPulse is a FastAPI backend and Chrome extension for evidence-grounded fact checking. The extension calls the backend's `/api/fact-check` endpoint. OpenRouter can provide the AI model for fact-check assessments and other AI-assisted triage tasks; Tavily supplies independently retrieved live web results for manual checks. Gemini and Groq remain optional providers when explicitly selected.
 
 ## Deploy the backend on Vercel
 
@@ -8,9 +8,12 @@ The repository includes a root `main.py` entry point and `requirements.txt`, so 
 
 1. Import `https://github.com/aiger079/Civic_Pluse` in Vercel.
 2. Before deploying, add these environment variables in the Vercel project settings:
-   - `GEMINI_API_KEY` — required when `CIVICPULSE_FACT_CHECK_PROVIDER=gemini`.
-   - `CIVICPULSE_FACT_CHECK_PROVIDER=gemini` — selects Gemini Search as the primary fact-check provider.
-   - `GROQ_API_KEY` — optional; ignored when Gemini is selected.
+   - `OPENROUTER_API_KEY` — required when using OpenRouter.
+   - `CIVICPULSE_AI_PROVIDER=openrouter` — selects OpenRouter for model tasks.
+   - `CIVICPULSE_FACT_CHECK_PROVIDER=openrouter` — selects OpenRouter plus Tavily for manual web-grounded checks.
+   - `OPENROUTER_MODEL` — model ID available to your OpenRouter account; free models can have strict request caps.
+   - `TAVILY_API_KEY` — recommended for reliable web/news search quota; without it, keyless Tavily access is rate limited.
+   - `GEMINI_API_KEY` / `GROQ_API_KEY` — optional only if you select those providers instead.
    - `CIVICPULSE_API_KEY` — required; generate a separate strong secret for the deployed service.
    - `CIVICPULSE_DATA_DIR=/tmp/civicpulse` — required for this JSON-backed demo to start in Vercel's writable temporary directory.
    - `ALLOWED_ORIGINS=https://civic-pluse-sooty.vercel.app` — include each exact website origin that should call the API.
@@ -30,7 +33,7 @@ The unpacked extension source is in `extension/`. The landing page links to `Civ
 
 Automatic visible-claim scanning is enabled by default. It sends only visible text snippets and the current site domain to the backend, checks at a limited pace, and marks claims red only when live search returned sources and the assessment verdict is `FABRICATED_HOAX` or `DISPUTED_RUMOUR`. This is a preliminary AI flag, not a confirmed fact; users can disable automatic scanning in the popup.
 
-Google Search grounding with Gemini 3.8 Flash requires a Gemini project with eligible billing and available search quota. When Google Search fails or returns no usable sources, a manual check in extension 1.2.2 can use Tavily to search the web and Gemini to assess the returned excerpts. Tavily receives a short query about the public claim without the current site domain. Keyless Tavily access is rate limited. Set `TAVILY_API_KEY` as a server environment secret for a dedicated quota. If Tavily is unavailable, manual checks can still use Wikipedia for public encyclopedia topics. Automatic scanning uses the configured Gemini or Groq search provider.
+OpenRouter provides the language model; it does not itself guarantee web search. For manual web/news checks, CivicPulse asks the selected AI provider for a focused public query, retrieves results through Tavily, then asks the model to assess only those returned excerpts. Tavily receives the query without the current site domain. Keyless Tavily access is rate limited, so set `TAVILY_API_KEY` as a server environment secret for a dedicated quota. Automatic scanning uses the configured search-capable fact-check provider; the OpenRouter plus Tavily path is enabled for manual checks.
 
 ## Local backend
 
