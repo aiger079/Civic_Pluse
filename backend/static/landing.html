@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#07090b">
   <meta name="description" content="CivicPulse helps you check claims against sources as you browse. Review the evidence before you decide.">
   <title>CivicPulse — Keep the signal. Leave the noise.</title>
+  <link rel="icon" type="image/jpeg" href="/static/civicpulse-logo.jpeg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -60,10 +61,7 @@
       border-bottom: 1px solid rgba(188, 220, 218, .09);
     }
     .brand { display: inline-flex; align-items: center; gap: 11px; font: 600 1.02rem var(--display); letter-spacing: -.035em; }
-    .brand-mark { position: relative; width: 30px; height: 30px; display: inline-grid; place-items: center; }
-    .brand-mark::before, .brand-mark::after { content: ""; position: absolute; border: 1px solid var(--mint); border-radius: 50%; transform: rotate(-32deg); }
-    .brand-mark::before { width: 21px; height: 21px; box-shadow: 0 0 18px rgba(131,243,208,.28), inset 0 0 8px rgba(131,243,208,.2); }
-    .brand-mark::after { width: 9px; height: 26px; border-color: var(--cyan); transform: rotate(38deg); }
+    .brand-mark { width: 36px; height: 36px; display: inline-block; flex: 0 0 auto; object-fit: cover; overflow: hidden; border: 1px solid rgba(99,220,229,.35); border-radius: 11px; box-shadow: 0 0 18px rgba(99,220,229,.18); }
     .brand-pulse { color: var(--mint); }
     .nav-links { display: flex; align-items: center; gap: 34px; margin-left: 95px; color: #a4aeaa; font-size: .81rem; }
     .nav-links a { transition: color .2s ease; }
@@ -213,7 +211,7 @@
 </head>
 <body>
   <header class="site-header page-shell">
-    <a class="brand" href="#top" aria-label="CivicPulse home"><span class="brand-mark" aria-hidden="true"></span><span>Civic<span class="brand-pulse">Pulse</span></span></a>
+    <a class="brand" href="#top" aria-label="CivicPulse home"><img class="brand-mark" src="/static/civicpulse-logo.jpeg" alt=""><span>Civic<span class="brand-pulse">Pulse</span></span></a>
     <nav class="nav-links" aria-label="Main navigation">
       <a href="#features">What it does</a>
       <a href="#how-it-works">How it works</a>
@@ -298,7 +296,7 @@
     </section>
   </main>
 
-  <footer class="page-shell"><a class="brand" href="#top"><span class="brand-mark" aria-hidden="true"></span><span>Civic<span class="brand-pulse">Pulse</span></span></a><span>Check the source. Keep your judgement.</span><nav class="footer-links" aria-label="Footer"><a href="/app">Fact checker</a><a href="#install">Install guide</a></nav></footer>
+  <footer class="page-shell"><a class="brand" href="#top" aria-label="CivicPulse home"><img class="brand-mark" src="/static/civicpulse-logo.jpeg" alt=""><span>Civic<span class="brand-pulse">Pulse</span></span></a><span>Check the source. Keep your judgement.</span><nav class="footer-links" aria-label="Footer"><a href="/app">Fact checker</a><a href="#install">Install guide</a></nav></footer>
 
   <script>
     (() => {

@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CivicPulse AI Engine Lab & Ledger</title>
+  <link rel="icon" type="image/jpeg" href="/static/civicpulse-logo.jpeg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -91,12 +92,9 @@
     .brand-logo {
       width: 38px;
       height: 38px;
-      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+      object-fit: cover;
+      display: block;
       border-radius: 9px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 19px;
       box-shadow: 0 0 16px var(--primary-glow);
     }
 
@@ -1043,7 +1041,7 @@
 
   <header>
     <div class="brand">
-      <div class="brand-logo">🛡️</div>
+      <img class="brand-logo" src="/static/civicpulse-logo.jpeg" alt="CivicPulse logo">
       <div class="brand-text">
         <h1>CivicPulse AI Lab</h1>
         <p>Evidence workspace · human-reviewed response</p>
