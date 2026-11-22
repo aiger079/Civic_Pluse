@@ -67,8 +67,8 @@ document.addEventListener("DOMContentLoaded", () => {
         body: JSON.stringify({
           text,
           context: "chrome_popup",
-          allow_public_reference_search: true,
-          allow_web_search: true
+          allow_public_reference_search: false,
+          allow_web_search: false
         })
       });
       const data = await res.json().catch(() => ({}));

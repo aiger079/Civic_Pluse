@@ -250,6 +250,9 @@ load_dotenv()
 class DualGateEngine:
     def __init__(self):
         print("Initializing CivicPulse Dual-Gate AI Engine (Safe Routing & Calibrated Verification)...")
+        self.live_search_enabled = os.getenv(
+            "CIVICPULSE_LIVE_SEARCH_ENABLED", "false"
+        ).strip().lower() in {"1", "true", "yes"}
         
         # Load environment variables strictly without hardcoded fallback credentials
         self.openrouter_api_key = (os.getenv("OPENROUTER_API_KEY") or "").strip()
@@ -260,15 +263,11 @@ class DualGateEngine:
             raise RuntimeError(
                 "Missing AI provider key. Configure OPENROUTER_API_KEY, GEMINI_API_KEY, or GROQ_API_KEY."
             )
-        self.openrouter_model = os.getenv("OPENROUTER_MODEL", "openrouter/free").strip()
-        self.openrouter_reference_model = os.getenv(
-            "OPENROUTER_REFERENCE_MODEL", self.openrouter_model
-        ).strip()
-        configured_ai_provider = (os.getenv("CIVICPULSE_AI_PROVIDER") or "").strip().lower()
+        self.openrouter_model = os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini")
         self.ai_provider = (
-            "openrouter" if self.openrouter_api_key
-            else configured_ai_provider or ("gemini" if self.gemini_api_key else "groq")
-        )
+            os.getenv("CIVICPULSE_AI_PROVIDER") or
+            ("openrouter" if self.openrouter_api_key else "gemini" if self.gemini_api_key else "groq")
+        ).strip().lower()
         if self.ai_provider not in {"openrouter", "gemini", "groq"}:
             raise RuntimeError("CIVICPULSE_AI_PROVIDER must be 'openrouter', 'gemini', or 'groq'.")
         if self.ai_provider == "openrouter" and not self.openrouter_api_key:
@@ -283,15 +282,10 @@ class DualGateEngine:
         # existing Qwen model for other tasks and use this model for fact-checking.
         self.fact_check_model = os.getenv("GROQ_FACT_CHECK_MODEL", "openai/gpt-oss-20b")
         self.gemini_fact_check_model = os.getenv("GEMINI_FACT_CHECK_MODEL", "gemini-3.8-flash")
-        configured_fact_check_provider = (
-            os.getenv("CIVICPULSE_FACT_CHECK_PROVIDER") or ""
-        ).strip().lower()
-        # A configured OpenRouter key takes precedence over legacy Gemini/Groq
-        # deployment selectors, so an old Vercel setting cannot route checks away.
         self.fact_check_provider = (
-            "openrouter" if self.openrouter_client
-            else configured_fact_check_provider or self.ai_provider
-        )
+            os.getenv("CIVICPULSE_FACT_CHECK_PROVIDER") or
+            self.ai_provider
+        ).strip().lower()
         if self.fact_check_provider not in {"gemini", "groq", "openrouter"}:
             raise RuntimeError("CIVICPULSE_FACT_CHECK_PROVIDER must be 'gemini', 'groq', or 'openrouter'.")
         if self.fact_check_provider == "openrouter" and not self.openrouter_client:
@@ -321,8 +315,7 @@ class DualGateEngine:
                 print(f"Optional Groq client unavailable: {type(e).__name__}")
         print(f"Fact-check provider: {self.fact_check_provider}")
         print(f"AI provider: {self.ai_provider}")
-        if self.openrouter_client:
-            print(f"OpenRouter model: {self.openrouter_model}")
+        print(f"Live web search: {'enabled' if self.live_search_enabled else 'disabled'}")
         print(f"Gemini search: {'configured' if self.gemini_api_key else 'not configured'}")
 
         # Local HF Model placeholders
@@ -682,45 +675,29 @@ Polite Rewrite:"""
         if not self.openrouter_client:
             raise RuntimeError("OpenRouter API is not configured")
         body = {
-            "model": self.openrouter_reference_model if reference_assessment else self.openrouter_model,
+            "model": os.getenv(
+                "OPENROUTER_REFERENCE_MODEL" if reference_assessment else "OPENROUTER_MODEL",
+                os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini"),
+            ),
             "messages": [{"role": "user", "content": prompt}],
             "temperature": 0,
             "max_tokens": 1200 if not reference_assessment else 600,
             "response_format": {"type": "json_object"},
         }
-        headers = {
-            "Authorization": f"Bearer {self.openrouter_api_key}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": os.getenv("OPENROUTER_SITE_URL", "https://civic-pluse-sooty.vercel.app"),
-            "X-Title": "CivicPulse",
-        }
-        timeout = max(5, int(os.getenv("OPENROUTER_TIMEOUT_SECONDS", "45")))
-
-        def send_request(payload):
-            request = UrlRequest(
-                "https://openrouter.ai/api/v1/chat/completions",
-                data=json.dumps(payload).encode("utf-8"),
-                headers=headers,
-                method="POST",
-            )
-            with urlopen(request, timeout=timeout) as response:
-                return json.loads(response.read().decode("utf-8"))
-
-        try:
-            result = send_request(body)
-        except Exception as error:
-            # Some provider endpoints behind a named model reject JSON mode even
-            # though the OpenRouter-compatible route is otherwise available.
-            if getattr(error, "code", None) != 400 or "response_format" not in body:
-                raise
-            body.pop("response_format")
-            result = send_request(body)
+        request = UrlRequest(
+            "https://openrouter.ai/api/v1/chat/completions",
+            data=json.dumps(body).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {self.openrouter_api_key}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": os.getenv("OPENROUTER_SITE_URL", "https://civic-pluse-sooty.vercel.app"),
+                "X-Title": "CivicPulse",
+            },
+            method="POST",
+        )
+        with urlopen(request, timeout=max(5, int(os.getenv("OPENROUTER_TIMEOUT_SECONDS", "45")))) as response:
+            result = json.loads(response.read().decode("utf-8"))
         content = result["choices"][0]["message"].get("content")
-        if isinstance(content, list):
-            content = "\n".join(
-                block.get("text", "") for block in content
-                if isinstance(block, dict) and isinstance(block.get("text"), str)
-            )
         if not isinstance(content, str) or not content.strip():
             raise ValueError("OpenRouter returned no text content")
         return content.strip()
@@ -920,6 +897,22 @@ Polite Rewrite:"""
         allow_public_reference_search: bool = False, allow_web_search: bool = False,
     ) -> Dict[str, Any]:
         """Search-grounded fact-check with the selected provider and live citations."""
+        if not self.live_search_enabled:
+            return {
+                "verdict": "INSUFFICIENT_EVIDENCE",
+                "truth_score": 0.50,
+                "falsehood_score": 0.50,
+                "confidence": 0.30,
+                "uncertainty_state": True,
+                "evidence_status": "LIVE_SEARCH_DISABLED",
+                "provider_used": None,
+                "sources_verified": False,
+                "search_performed": False,
+                "summary": "Live web search is disabled.",
+                "explanation": "CivicPulse is configured not to send claims to web-search providers, so it cannot verify this claim with online evidence.",
+                "sources": [],
+                "actionable_advice": "Check a trusted primary source before sharing.",
+            }
         if not self.groq_client and not self.gemini_api_key and not self.openrouter_client:
             return {
                 "verdict": "INSUFFICIENT_EVIDENCE",
@@ -1088,12 +1081,9 @@ Return one JSON object only (no Markdown):
                         if sources:
                             provider_used = "openrouter+tavily"
                             search_performed = True
-            except Exception as error:
+            except (OSError, ValueError, RuntimeError) as error:
                 openrouter_error = error
-                print(
-                    f"OpenRouter/Tavily fact-check failed: {type(error).__name__} "
-                    f"(HTTP {getattr(error, 'code', 'n/a')})"
-                )
+                print(f"OpenRouter/Tavily fact-check failed: {type(error).__name__}")
 
         if (
             self.gemini_api_key and not openrouter_is_primary and allow_web_search

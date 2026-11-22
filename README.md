@@ -35,6 +35,10 @@ Automatic visible-claim scanning is enabled by default. It sends only visible te
 
 OpenRouter provides the language model; it does not itself guarantee web search. For manual web/news checks, CivicPulse asks the selected AI provider for a focused public query, retrieves results through Tavily, then asks the model to assess only those returned excerpts. Tavily receives the query without the current site domain. Keyless Tavily access is rate limited, so set `TAVILY_API_KEY` as a server environment secret for a dedicated quota. Automatic scanning uses the configured search-capable fact-check provider; the OpenRouter plus Tavily path is enabled for manual checks.
 
+## Live search
+
+Live web search is disabled by default through `CIVICPULSE_LIVE_SEARCH_ENABLED=false`. In this mode CivicPulse does not send claims to Gemini Search, Groq browser search, Tavily, or Wikipedia and returns `LIVE_SEARCH_DISABLED` for fact checks. Set the variable to `true` only when online evidence retrieval is intentionally required.
+
 ## Local backend
 
 Copy `backend/.env.example` to `backend/.env`, fill in the required keys, then run:
