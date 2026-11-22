@@ -674,7 +674,7 @@ def serve_fact_checker():
 
 @app.get("/extension/download")
 def download_chrome_extension():
-    archive_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "CivicPulse-Extension.zip")
+    archive_file = os.path.join(static_dir, "CivicPulse-Extension.zip")
     if os.path.exists(archive_file):
         return FileResponse(archive_file, media_type="application/zip", filename="CivicPulse-Extension.zip")
     raise HTTPException(status_code=404, detail="The Chrome extension package is unavailable.")
