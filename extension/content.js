@@ -51,9 +51,9 @@
     spinnerBox.innerHTML = `
       <div class="civicpulse-spinner"></div>
       <div>
-        <p style="font-weight: 600;">Preparing a preliminary model assessment...</p>
+        <p style="font-weight: 600;">Looking for evidence about this claim…</p>
         <p style="font-size: 11px; color: #94a3b8; margin-top: 2px;">
-          Suggested references are not checked live.
+          Review any sources the check returns.
         </p>
       </div>
     `;
@@ -61,9 +61,12 @@
     // Transparency Note
     const privacyNote = document.createElement("div");
     privacyNote.className = "civicpulse-privacy-notice";
-    privacyNote.innerHTML = `
-      <strong>🔒 Data disclosure:</strong> This text and the website domain (<code>${domain}</code>) are sent to the CivicPulse backend. It searches with Groq and may send the claim and domain to Google Gemini Search if Groq is unavailable or returns no usable sources. Cookies, logins, and browsing history are not sent.
-    `;
+    const privacyHeading = document.createElement("strong");
+    privacyHeading.textContent = "🔒 Data disclosure";
+    privacyNote.append(
+      privacyHeading,
+      ` CivicPulse sends the selected text and site domain (${domain}) to its backend. The configured provider (Google Gemini or Groq) may receive that information. If Google Search is unavailable, Gemini may identify a public topic to look up in Wikipedia. Wikipedia receives the topic only. CivicPulse does not send cookies, logins, or browsing history.`
+    );
 
     const quoteEl = document.createElement("p");
     quoteEl.className = "civicpulse-selected-quote";
@@ -88,21 +91,17 @@
     const root = ensureModalContainer();
     root.textContent = "";
 
-    const a = data.analysis || {};
-    const verdict = a.verdict || "ANALYZED";
-    const confPct = Math.round((a.confidence !== undefined ? a.confidence : 0.35) * 100);
-    const truthEstimate = a.model_estimate?.truth_score ?? a.truth_score ?? 0.5;
-    const falseEstimate = a.model_estimate?.falsehood_score ?? a.falsehood_score ?? 0.5;
-    const truthPct = Math.round(Math.max(0, Math.min(1, truthEstimate)) * 100);
-    const falsePct = Math.round(Math.max(0, Math.min(1, falseEstimate)) * 100);
-    const isUncertain = !!a.uncertainty_state;
+    const a = data?.analysis || {};
+    const verdict = a.verdict;
+    const evidence = describeCivicPulseEvidence(a);
+    const hasVerdict = typeof verdict === "string" && !!verdict && !evidence;
 
-    let pillClass = "pill-rumour";
+    let pillClass = hasVerdict ? "pill-rumour" : "pill-neutral";
     let verdictIcon = "⚠️";
-    if (verdict === "VERIFIED_TRUE") {
+    if (hasVerdict && verdict === "VERIFIED_TRUE") {
       pillClass = "pill-true";
       verdictIcon = "✅";
-    } else if (verdict === "FABRICATED_HOAX" || verdict === "DISPUTED_RUMOUR") {
+    } else if (hasVerdict && (verdict === "FABRICATED_HOAX" || verdict === "DISPUTED_RUMOUR")) {
       pillClass = "pill-fake";
       verdictIcon = "🚨";
     }
@@ -119,7 +118,7 @@
     header.innerHTML = `
       <div class="civicpulse-brand">
         <span class="civicpulse-logo">${verdictIcon}</span>
-        <h3>CivicPulse Auditable Verdict</h3>
+        <h3>CivicPulse Fact Check</h3>
       </div>
     `;
     const closeBtn = document.createElement("button");
@@ -139,20 +138,20 @@
 
     const pill = document.createElement("div");
     pill.className = `civicpulse-verdict-pill ${pillClass}`;
-    pill.textContent = verdict;
-
-    const confSpan = document.createElement("span");
-    confSpan.style.fontSize = "12px";
-    confSpan.style.color = "#94a3b8";
-    confSpan.style.fontWeight = "600";
-    confSpan.textContent = `Confidence: ${confPct}%`;
-
+    pill.textContent = evidence?.label || verdict || "Check failed";
     topRow.appendChild(pill);
-    topRow.appendChild(confSpan);
+    if (hasVerdict && Number.isFinite(a.confidence)) {
+      const confSpan = document.createElement("span");
+      confSpan.style.fontSize = "12px";
+      confSpan.style.color = "#94a3b8";
+      confSpan.style.fontWeight = "600";
+      confSpan.textContent = `Confidence: ${Math.round(a.confidence * 100)}%`;
+      topRow.appendChild(confSpan);
+    }
     body.appendChild(topRow);
 
-    // Uncertainty Warning if evidence missing
-    if (isUncertain) {
+    // Uncertain preliminary assessments still need review.
+    if (hasVerdict && a.uncertainty_state) {
       const warnBox = document.createElement("div");
       warnBox.className = "civicpulse-uncertainty-box";
       warnBox.innerHTML = `
@@ -161,47 +160,50 @@
       body.appendChild(warnBox);
     }
 
-    // Probability Meters
-    const meters = document.createElement("div");
-    meters.className = "civicpulse-meter-group";
-    meters.innerHTML = `
-      <div class="civicpulse-meter-label">
-        <span>Truth Probability</span>
-        <span><strong>${truthPct}%</strong></span>
-      </div>
-      <div class="civicpulse-bar-bg">
-        <div class="civicpulse-bar-fill truth" style="width: ${truthPct}%;"></div>
-      </div>
-      <div class="civicpulse-meter-label" style="margin-top: 6px;">
-        <span>Falsehood / Hoax Probability</span>
-        <span><strong>${falsePct}%</strong></span>
-      </div>
-      <div class="civicpulse-bar-bg">
-        <div class="civicpulse-bar-fill fake" style="width: ${falsePct}%;"></div>
-      </div>
-    `;
-    body.appendChild(meters);
+    const truthEstimate = a.model_estimate?.truth_score ?? a.truth_score;
+    const falseEstimate = a.model_estimate?.falsehood_score ?? a.falsehood_score;
+    if (hasVerdict && a.provider_used !== "wikimedia" && Number.isFinite(truthEstimate) && Number.isFinite(falseEstimate)) {
+      const truthPct = Math.round(Math.max(0, Math.min(1, truthEstimate)) * 100);
+      const falsePct = Math.round(Math.max(0, Math.min(1, falseEstimate)) * 100);
+      const meters = document.createElement("div");
+      meters.className = "civicpulse-meter-group";
+      meters.innerHTML = `
+        <div class="civicpulse-meter-label">
+          <span>Model-estimated truth</span>
+          <span><strong>${truthPct}%</strong></span>
+        </div>
+        <div class="civicpulse-bar-bg">
+          <div class="civicpulse-bar-fill truth" style="width: ${truthPct}%;"></div>
+        </div>
+        <div class="civicpulse-meter-label" style="margin-top: 6px;">
+          <span>Model-estimated falsehood</span>
+          <span><strong>${falsePct}%</strong></span>
+        </div>
+        <div class="civicpulse-bar-bg">
+          <div class="civicpulse-bar-fill fake" style="width: ${falsePct}%;"></div>
+        </div>
+      `;
+      body.appendChild(meters);
+    }
 
     // Summary & Explanation (Rendered safely via textContent)
     const summaryEl = document.createElement("div");
     summaryEl.className = "civicpulse-summary";
-    summaryEl.textContent = a.summary || "";
-    body.appendChild(summaryEl);
+    summaryEl.textContent = a.summary || (verdict ? "" : "CivicPulse returned an incomplete response. Try again in a moment.");
+    if (summaryEl.textContent) body.appendChild(summaryEl);
 
     const explanationEl = document.createElement("div");
     explanationEl.className = "civicpulse-explanation";
     explanationEl.textContent = a.explanation || "";
-    body.appendChild(explanationEl);
+    if (explanationEl.textContent) body.appendChild(explanationEl);
 
     // Sources & Citations
-    if (a.sources && a.sources.length > 0) {
+    if (Array.isArray(a.sources) && a.sources.length > 0) {
       const sourcesBox = document.createElement("div");
       sourcesBox.className = "civicpulse-sources-box";
       
       const sourcesHeading = document.createElement("h5");
-      sourcesHeading.textContent = a.search_performed
-        ? "📑 Live search pages (check relevance):"
-        : "📑 Suggested references:";
+      sourcesHeading.textContent = `📑 ${labelCivicPulseSources(a)}:`;
       sourcesHeading.style.fontSize = "11.5px";
       sourcesHeading.style.color = "#93c5fd";
       sourcesHeading.style.marginBottom = "6px";
@@ -240,10 +242,11 @@
     }
 
     // Actionable Advice
-    if (a.actionable_advice) {
+    const advice = evidence?.advice || a.actionable_advice;
+    if (advice) {
       const adviceEl = document.createElement("div");
       adviceEl.className = "civicpulse-advice";
-      adviceEl.textContent = `💡 Actionable Advice: ${a.actionable_advice}`;
+      adviceEl.textContent = advice;
       body.appendChild(adviceEl);
     }
 

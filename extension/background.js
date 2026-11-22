@@ -97,7 +97,8 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           text: selectedText,
-          context: pageDomain(tab.url)
+          context: pageDomain(tab.url),
+          allow_public_reference_search: true
         })
       });
 

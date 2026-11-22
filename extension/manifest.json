@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "CivicPulse — Fact & Misinformation Intelligence",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Evidence-grounded fact checking with automatic red highlighting for live-search claims flagged as false.",
   "permissions": [
     "contextMenus",
@@ -25,7 +25,7 @@
         "https://*.youtube.com/*",
         "https://civic-pluse-sooty.vercel.app/*"
       ],
-      "js": ["content.js"],
+      "js": ["evidence-result.js", "content.js"],
       "css": ["content.css"],
       "run_at": "document_idle"
     }

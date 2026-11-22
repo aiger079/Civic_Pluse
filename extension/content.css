@@ -120,6 +120,12 @@
   border: 1px solid #f59e0b;
 }
 
+.pill-neutral {
+  background: rgba(148, 163, 184, 0.18);
+  color: #e2e8f0;
+  border: 1px solid #64748b;
+}
+
 .civicpulse-uncertainty-box {
   background: rgba(245, 158, 11, 0.12);
   border-left: 3px solid #f59e0b;

@@ -30,6 +30,8 @@ The unpacked extension source is in `extension/`. The landing page links to `Civ
 
 Automatic visible-claim scanning is enabled by default. It sends only visible text snippets and the current site domain to the backend, checks at a limited pace, and marks claims red only when live search returned sources and the assessment verdict is `FABRICATED_HOAX` or `DISPUTED_RUMOUR`. This is a preliminary AI flag, not a confirmed fact; users can disable automatic scanning in the popup.
 
+Google Search grounding with Gemini 3.8 Flash requires a Gemini project with eligible billing and available search quota. If Google Search fails or returns no usable sources, a manual check in extension 1.2.1 or later can look up a public topic in English Wikipedia and assess the retrieved excerpts. Only the public topic is sent to Wikipedia. This fallback has limited coverage and automatic scanning still requires live search.
+
 ## Local backend
 
 Copy `backend/.env.example` to `backend/.env`, fill in the required keys, then run:

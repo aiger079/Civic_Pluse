@@ -1,6 +1,6 @@
 const API_URL = "https://civic-pluse-sooty.vercel.app";
 
-document.addEventListener("DOMContentLoaded", async () => {
+document.addEventListener("DOMContentLoaded", () => {
   const statusDot = document.getElementById("statusDot");
   const statusText = document.getElementById("statusText");
   const claimInput = document.getElementById("claimInput");
@@ -27,66 +27,91 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   });
 
-  // Check health of engine
-  try {
-    const res = await fetch(`${API_URL}/health`);
-    const data = await res.json();
-    if (data.status === "online") {
+  fetch(`${API_URL}/health`)
+    .then(res => res.json())
+    .then(data => {
+      if (data.status !== "online") throw new Error("Backend unavailable");
       statusDot.className = "status-dot";
       statusText.innerText = "Engine Online";
-    }
-  } catch (err) {
-    statusDot.className = "status-dot offline";
-    statusText.innerText = "Engine Offline";
+    })
+    .catch(() => {
+      statusDot.className = "status-dot offline";
+      statusText.innerText = "Engine Offline";
+    });
+
+  function showRequestError(label, message) {
+    resultBox.style.display = "block";
+    verdictTag.innerText = label;
+    verdictTag.className = "verdict-tag tag-neutral";
+    confidenceText.innerText = "";
+    resultSummary.innerText = message;
+    sourcesContainer.style.display = "none";
   }
 
   // Handle Verify button
   verifyBtn.addEventListener("click", async () => {
     const text = claimInput.value.trim();
-    if (!text) return;
+    if (text.length < 5 || text.length > 1500) {
+      showRequestError("Check claim length", "Enter a claim between 5 and 1,500 characters.");
+      return;
+    }
 
     verifyBtn.innerText = "Analyzing...";
     verifyBtn.disabled = true;
+    resultBox.style.display = "none";
 
     try {
       const res = await fetch(`${API_URL}/api/fact-check`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, context: "chrome_popup" })
+        body: JSON.stringify({
+          text,
+          context: "chrome_popup",
+          allow_public_reference_search: true
+        })
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (res.status === 429) {
+          showRequestError("Request limit reached", "Wait a minute before checking this claim again.");
+        } else {
+          showRequestError("Check failed", typeof data.detail === "string" ? data.detail : "Try again in a moment.");
+        }
+        return;
+      }
       const a = data.analysis;
+      if (!a || typeof a.verdict !== "string") {
+        showRequestError("Check failed", "CivicPulse returned an incomplete response. Try again in a moment.");
+        return;
+      }
+      const evidence = describeCivicPulseEvidence(a);
 
       resultBox.style.display = "block";
-      verdictTag.innerText = a.verdict || "ANALYZED";
+      verdictTag.innerText = evidence?.label || a.verdict;
       verdictTag.className = "verdict-tag";
 
-      if (a.verdict === "VERIFIED_TRUE") verdictTag.classList.add("tag-true");
+      if (evidence) verdictTag.classList.add("tag-neutral");
+      else if (a.verdict === "VERIFIED_TRUE") verdictTag.classList.add("tag-true");
       else if (a.verdict === "FABRICATED_HOAX") verdictTag.classList.add("tag-fake");
       else verdictTag.classList.add("tag-rumour");
 
-      const confPct = Math.round((a.confidence !== undefined ? a.confidence : 0.35) * 100);
-      confidenceText.innerText = `Confidence: ${confPct}%`;
+      confidenceText.innerText = !evidence && Number.isFinite(a.confidence)
+        ? `Confidence: ${Math.round(a.confidence * 100)}%`
+        : "";
 
-      const providerName = a.provider_used === "gemini"
-        ? "Google Gemini"
-        : a.provider_used === "groq"
-          ? "Groq"
-          : "live search";
-      const evidenceNote = a.evidence_status === "LIVE_SEARCH_RESULTS_UNVERIFIED"
-        ? `Live web search via ${providerName} was used; the returned pages and verdict still need human review.`
-        : a.evidence_status === "SEARCH_UNAVAILABLE"
-          ? "Live search providers were unavailable, so no verdict was produced."
-          : "Preliminary assessment; verify important claims with primary sources.";
-      resultSummary.innerText = `${a.summary || a.explanation || ""}\n\n${evidenceNote}`;
+      if (evidence) {
+        resultSummary.innerText = [a.summary, a.explanation, evidence.advice]
+          .filter(Boolean).join("\n\n");
+      } else {
+        resultSummary.innerText = [a.summary || a.explanation, "Review the evidence before relying on this preliminary assessment."]
+          .filter(Boolean).join("\n\n");
+      }
 
-      if (a.sources && a.sources.length > 0) {
+      if (Array.isArray(a.sources) && a.sources.length > 0) {
         sourcesContainer.style.display = "block";
         sourcesContainer.textContent = "";
         const titleSpan = document.createElement("strong");
-        titleSpan.textContent = a.search_performed
-          ? `📑 Live search pages from ${providerName} (check relevance): `
-          : "📑 Suggested references: ";
+        titleSpan.textContent = `📑 ${labelCivicPulseSources(a)}: `;
         sourcesContainer.appendChild(titleSpan);
 
         a.sources.forEach((s, idx) => {
@@ -112,8 +137,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         sourcesContainer.style.display = "none";
       }
 
-    } catch (err) {
-      alert("Error: Ensure backend is running at " + API_URL);
+    } catch {
+      showRequestError("Connection failed", "CivicPulse could not be reached. Check your connection and try again.");
     } finally {
       verifyBtn.innerText = "⚡ Verify Claim";
       verifyBtn.disabled = false;
