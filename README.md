@@ -11,7 +11,7 @@ The repository includes a root `main.py` entry point and `requirements.txt`, so 
    - `OPENROUTER_API_KEY` — required when using OpenRouter.
    - `CIVICPULSE_AI_PROVIDER=openrouter` — selects OpenRouter for model tasks.
    - `CIVICPULSE_FACT_CHECK_PROVIDER=openrouter` — selects OpenRouter plus Tavily for manual web-grounded checks.
-   - `OPENROUTER_MODEL` — model ID available to your OpenRouter account; free models can have strict request caps.
+   - `OPENROUTER_MODEL=openrouter/free` — routes to an available free model supporting the request format. Free model quotas still apply; choose a paid model explicitly if you need higher availability.
    - `TAVILY_API_KEY` — recommended for reliable web/news search quota; without it, keyless Tavily access is rate limited.
    - `GEMINI_API_KEY` / `GROQ_API_KEY` — optional only if you select those providers instead.
    - `CIVICPULSE_API_KEY` — required; generate a separate strong secret for the deployed service.
