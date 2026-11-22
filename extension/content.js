@@ -323,55 +323,212 @@
     }
   });
 
-  // Passive On-Screen Scanner: Strictly opt-in
-  chrome.storage.local.get("civicpulse_passive_scan_enabled", (res) => {
-    const isOptedIn = res && res.civicpulse_passive_scan_enabled === true;
-    if (!isOptedIn) {
-      console.log("ℹ️ CivicPulse passive on-screen scanner is OFF (Opt-in required).");
-      return;
+  // Automatic visible-claim scanner. It checks visible text snippets only and
+  // starts enabled on install; users can turn it off from the popup.
+  const PASSIVE_SCAN_KEY = "civicpulse_passive_scan_enabled";
+  const CANDIDATE_SELECTOR = [
+    "h1", "h2", "h3", "p", "li", "blockquote",
+    "[data-pre-plain-text] .selectable-text",
+    "[data-testid='msg-container'] .selectable-text",
+    "ytd-comment-thread-renderer #content-text",
+    "ytd-text-inline-expander #content",
+    "span[dir='auto']"
+  ].join(",");
+  const checkedTexts = new Set();
+  let scannerCleanup = null;
+
+  function normalizeClaimText(value) {
+    return String(value || "").replace(/\s+/g, " ").trim();
+  }
+
+  function rememberCheckedText(text) {
+    checkedTexts.add(text);
+    if (checkedTexts.size > 500) {
+      checkedTexts.delete(checkedTexts.values().next().value);
+    }
+  }
+
+  function highlightFalseClaim(element, analysis) {
+    const verdict = String(analysis.verdict || "").toUpperCase();
+    const hasLiveSources = analysis.search_performed === true
+      && Array.isArray(analysis.sources)
+      && analysis.sources.length > 0;
+    const flaggedFalse = hasLiveSources
+      && (verdict === "FABRICATED_HOAX" || verdict === "DISPUTED_RUMOUR");
+
+    if (!flaggedFalse || !element.isConnected) return false;
+
+    element.classList.add("civicpulse-false-claim");
+    element.dataset.civicpulseVerdict = verdict;
+    element.setAttribute(
+      "data-civicpulse-note",
+      "CivicPulse's preliminary live-search assessment flagged this claim. Check the linked sources before relying on it."
+    );
+    showOnScreenAlert(
+      normalizeClaimText(element.innerText),
+      verdict,
+      analysis.summary || analysis.explanation || "Check the linked sources before relying on this preliminary assessment."
+    );
+    return true;
+  }
+
+  function startPassiveScanner() {
+    if (scannerCleanup || !document.body) return;
+
+    const queue = [];
+    const queuedTexts = new Set();
+    const MAX_QUEUE_SIZE = 20;
+    const MIN_REQUEST_INTERVAL_MS = 10000;
+    let active = true;
+    let isChecking = false;
+    let nextCheckTimer = null;
+    let scanTimer = null;
+    let lastRequestAt = 0;
+
+    function isVisibleClaimElement(element) {
+      if (!element.isConnected || element.closest(
+        "#civicpulse-overlay-root, script, style, noscript, input, textarea, select, button, a, nav, header, footer, aside, [contenteditable='true']"
+      )) return false;
+
+      const style = window.getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      return style.display !== "none"
+        && style.visibility !== "hidden"
+        && Number(style.opacity) !== 0
+        && rect.width > 0
+        && rect.height > 0
+        && rect.right > 0
+        && rect.left < window.innerWidth
+        && rect.bottom > 0
+        && rect.top < window.innerHeight;
     }
 
-    console.log("✅ CivicPulse passive on-screen scanner is active (Opted In).");
+    function checkQueue() {
+      if (!active || isChecking || queue.length === 0 || !document.visibilityState || document.visibilityState === "hidden") return;
+      const wait = Math.max(0, MIN_REQUEST_INTERVAL_MS - (Date.now() - lastRequestAt));
+      if (wait > 0) {
+        if (!nextCheckTimer) nextCheckTimer = setTimeout(() => {
+          nextCheckTimer = null;
+          checkQueue();
+        }, wait);
+        return;
+      }
 
-    const VIRAL_PANIC_TRIGGERS = [
-      /transformer blast.*blackout/i,
-      /transformer exploded.*blackout/i,
-      /5g radiation.*shutting down/i,
-      /drinking boiled garlic.*cures/i,
-      /3 din tak.*light nahi aayegi/i
-    ];
+      const item = queue.shift();
+      queuedTexts.delete(item.text);
+      if (checkedTexts.has(item.text) || !isVisibleClaimElement(item.element)) {
+        checkQueue();
+        return;
+      }
 
-    let scannedTexts = new Set();
+      isChecking = true;
+      lastRequestAt = Date.now();
+      chrome.runtime.sendMessage({
+        type: "CHECK_TEXT_API",
+        text: item.text,
+        domain: window.location.hostname,
+        passive: true
+      }, (response) => {
+        isChecking = false;
+        if (!active) return;
+        if (response && response.rate_limited) {
+          if (active) {
+            queuedTexts.add(item.text);
+            queue.unshift(item);
+            nextCheckTimer = setTimeout(() => {
+              nextCheckTimer = null;
+              checkQueue();
+            }, 60000);
+          }
+          return;
+        }
+
+        rememberCheckedText(item.text);
+        if (chrome.runtime.lastError) {
+          console.debug("CivicPulse automatic check was unavailable.");
+        } else if (response && response.success && response.data && response.data.analysis) {
+          const matchingVisibleElements = Array.from(document.querySelectorAll(CANDIDATE_SELECTOR))
+            .filter(element => isVisibleClaimElement(element)
+              && normalizeClaimText(element.innerText || element.textContent) === item.text);
+          const targets = matchingVisibleElements.length > 0 ? matchingVisibleElements : [item.element];
+          targets.forEach(element => highlightFalseClaim(element, response.data.analysis));
+        }
+        if (queue.length > 0) {
+          checkQueue();
+        } else if (active) {
+          nextCheckTimer = setTimeout(() => {
+            nextCheckTimer = null;
+            scanVisibleText();
+          }, MIN_REQUEST_INTERVAL_MS);
+        }
+      });
+    }
 
     function scanVisibleText() {
-      const candidates = document.querySelectorAll("h1, h2, h3, p, span, div[data-text]");
-      for (const el of candidates) {
-        const text = el.innerText ? el.innerText.trim() : "";
-        if (text.length > 25 && text.length < 350 && !scannedTexts.has(text)) {
-          for (const regex of VIRAL_PANIC_TRIGGERS) {
-            if (regex.test(text)) {
-              scannedTexts.add(text);
-              chrome.runtime.sendMessage({
-                type: "CHECK_TEXT_API",
-                text: text,
-                domain: window.location.hostname
-              }, (res) => {
-                if (res && res.success && res.data && res.data.analysis) {
-                  const a = res.data.analysis;
-                  if (a.falsehood_score >= 0.65 || a.verdict === "FABRICATED_HOAX" || a.verdict === "DISPUTED_RUMOUR") {
-                    showOnScreenAlert(text, a.verdict, a.summary || a.explanation);
-                  }
-                }
-              });
-              break;
-            }
-          }
-        }
+      if (!active) return;
+      const candidates = document.querySelectorAll(CANDIDATE_SELECTOR);
+      let added = 0;
+      for (const element of candidates) {
+        if (!isVisibleClaimElement(element)) continue;
+        const text = normalizeClaimText(element.innerText || element.textContent);
+        if (text.length < 40 || text.length > 350 || checkedTexts.has(text) || queuedTexts.has(text)) continue;
+
+        queuedTexts.add(text);
+        queue.push({ element, text });
+        added += 1;
+        if (queue.length >= MAX_QUEUE_SIZE || added >= 5) break;
       }
+      checkQueue();
     }
 
-    setTimeout(scanVisibleText, 3000);
-    window.addEventListener("scroll", debounce(scanVisibleText, 2500), { passive: true });
+    const scheduleScan = debounce(() => {
+      if (!active) return;
+      if (scanTimer) clearTimeout(scanTimer);
+      scanTimer = setTimeout(scanVisibleText, 800);
+    }, 350);
+    const observer = new MutationObserver(scheduleScan);
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    window.addEventListener("scroll", scheduleScan, { passive: true });
+    window.addEventListener("resize", scheduleScan, { passive: true });
+    document.addEventListener("visibilitychange", scheduleScan);
+    scannerCleanup = () => {
+      active = false;
+      observer.disconnect();
+      window.removeEventListener("scroll", scheduleScan);
+      window.removeEventListener("resize", scheduleScan);
+      document.removeEventListener("visibilitychange", scheduleScan);
+      if (nextCheckTimer) clearTimeout(nextCheckTimer);
+      if (scanTimer) clearTimeout(scanTimer);
+      queue.length = 0;
+      queuedTexts.clear();
+      scannerCleanup = null;
+    };
+    scanVisibleText();
+  }
+
+  function stopPassiveScanner() {
+    if (scannerCleanup) scannerCleanup();
+    document.querySelectorAll(".civicpulse-false-claim").forEach(element => {
+      element.classList.remove("civicpulse-false-claim");
+      delete element.dataset.civicpulseVerdict;
+      element.removeAttribute("data-civicpulse-note");
+    });
+    const banner = document.getElementById("civicpulse-onscreen-banner");
+    if (banner) banner.remove();
+  }
+
+  chrome.storage.local.get(PASSIVE_SCAN_KEY, (settings) => {
+    const enabled = settings[PASSIVE_SCAN_KEY] !== false;
+    if (settings[PASSIVE_SCAN_KEY] === undefined) {
+      chrome.storage.local.set({ [PASSIVE_SCAN_KEY]: true });
+    }
+    if (enabled) startPassiveScanner();
+  });
+
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== "local" || !changes[PASSIVE_SCAN_KEY]) return;
+    if (changes[PASSIVE_SCAN_KEY].newValue === false) stopPassiveScanner();
+    else startPassiveScanner();
   });
 
   function debounce(fn, delay) {

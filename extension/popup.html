@@ -225,11 +225,11 @@
   </div>
 
   <div class="privacy-card">
-    <strong>🔒 Privacy & Data Transparency:</strong> When you check a claim, its text and the website domain are sent to the CivicPulse backend. The backend searches with Groq and may send the claim and domain to Google Gemini Search if Groq is unavailable or returns no usable sources. Cookies, logins, and browsing history are not sent.
+    <strong>🔒 Privacy & Data Transparency:</strong> Automatic scanning is on by default. While enabled, only visible text snippets and the current website domain are sent to CivicPulse for checking. The backend searches with Groq and may use Google Gemini Search if Groq is unavailable. Cookies, logins, and browsing history are not sent. Turn scanning off below any time.
   </div>
 
   <div class="toggle-row">
-    <span class="toggle-label">Passive On-Screen Detection</span>
+    <span class="toggle-label">Automatic false-claim scanning (on by default)</span>
     <label class="switch">
       <input type="checkbox" id="passiveScanToggle">
       <span class="slider"></span>
@@ -248,7 +248,7 @@
     <div id="sourcesContainer" class="sources-list" style="display: none;"></div>
   </div>
 
-  <a href="https://civicpluse.naxiv.com" target="_blank" class="open-lab-link">🚀 Open Full CivicPulse AI Engine Lab &rarr;</a>
+  <a href="https://civic-pluse-sooty.vercel.app" target="_blank" class="open-lab-link">🚀 Open Full CivicPulse AI Engine Lab &rarr;</a>
 
   <script src="popup.js"></script>
 </body>

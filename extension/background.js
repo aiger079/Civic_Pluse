@@ -1,5 +1,65 @@
 // CivicPulse Background Service Worker (Manifest V3)
-const DEFAULT_API_URL = "https://civicpluse.naxiv.com";
+const DEFAULT_API_URL = "https://civic-pluse-sooty.vercel.app";
+const PASSIVE_QUOTA_STORAGE_KEY = "civicpulse_passive_check_timestamps";
+const PASSIVE_QUOTA_LIMIT = 8;
+const PASSIVE_QUOTA_WINDOW_MS = 60 * 1000;
+let passiveQuotaSerial = Promise.resolve();
+
+function reservePassiveCheckSlot() {
+  const reservation = passiveQuotaSerial.then(async () => {
+    const now = Date.now();
+    const stored = await chrome.storage.local.get(PASSIVE_QUOTA_STORAGE_KEY);
+    const recent = (stored[PASSIVE_QUOTA_STORAGE_KEY] || [])
+      .filter(timestamp => Number.isFinite(timestamp) && now - timestamp < PASSIVE_QUOTA_WINDOW_MS);
+
+    if (recent.length >= PASSIVE_QUOTA_LIMIT) {
+      await chrome.storage.local.set({ [PASSIVE_QUOTA_STORAGE_KEY]: recent });
+      return false;
+    }
+
+    recent.push(now);
+    await chrome.storage.local.set({ [PASSIVE_QUOTA_STORAGE_KEY]: recent });
+    return true;
+  });
+  passiveQuotaSerial = reservation.then(() => undefined, () => undefined);
+  return reservation;
+}
+
+async function runTextCheck(request, sender, sendResponse) {
+  try {
+    const text = String(request.text || "").trim();
+    if (!text || text.length > 350) {
+      sendResponse({ success: false, error: "The visible claim is empty or too long to check." });
+      return;
+    }
+
+    if (request.passive && !(await reservePassiveCheckSlot())) {
+      sendResponse({ success: false, rate_limited: true });
+      return;
+    }
+
+    const response = await fetch(`${DEFAULT_API_URL}/api/fact-check`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text,
+        context: sender.tab ? pageDomain(sender.tab.url) : "popup"
+      })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      sendResponse({
+        success: false,
+        rate_limited: response.status === 429,
+        error: data.detail || `Fact-check request failed (${response.status}).`
+      });
+      return;
+    }
+    sendResponse({ success: true, data });
+  } catch (err) {
+    sendResponse({ success: false, error: err.message || "The CivicPulse backend could not be reached." });
+  }
+}
 
 function pageDomain(rawUrl) {
   try {
@@ -64,24 +124,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 // Listen to messages from content scripts or popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === "CHECK_TEXT_API") {
-    fetch(`${DEFAULT_API_URL}/api/fact-check`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        text: request.text,
-          context: sender.tab ? pageDomain(sender.tab.url) : "popup"
-      })
-    })
-    .then(async r => {
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok) {
-        sendResponse({ success: false, error: data.detail || `Fact-check request failed (${r.status}).` });
-        return;
-      }
-      sendResponse({ success: true, data });
-    })
-    .catch(err => sendResponse({ success: false, error: err.message }));
-    
+    runTextCheck(request, sender, sendResponse);
     return true; // Keep channel open for async response
   }
 

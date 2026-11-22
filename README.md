@@ -12,9 +12,9 @@ The repository includes a root `main.py` entry point and `requirements.txt`, so 
    - `CIVICPULSE_API_KEY` — required; generate a separate strong secret for the deployed service.
    - `GEMINI_API_KEY` — optional fallback provider key.
    - `CIVICPULSE_DATA_DIR=/tmp/civicpulse` — required for this JSON-backed demo to start in Vercel's writable temporary directory.
-   - `ALLOWED_ORIGINS=https://civicpluse.naxiv.com` — include each exact website origin that should call the API.
+   - `ALLOWED_ORIGINS=https://civic-pluse-sooty.vercel.app` — include each exact website origin that should call the API.
    - `CHROME_EXTENSION_ORIGIN=chrome-extension://<published-extension-id>` — set this to the exact Chrome Web Store extension origin after its ID is known.
-3. Add `civicpluse.naxiv.com` as a Vercel domain and configure the DNS records Vercel shows. The extension source currently calls this domain. If you use a `*.vercel.app` URL instead, update the extension API URL and its host permissions before packaging it.
+3. The extension source uses `https://civic-pluse-sooty.vercel.app`. If you add a custom domain later, update the API URL, host permissions, and allowed origin before packaging.
 4. Deploy. Vercel will provide an HTTPS URL. Check `/health` and `/` on that URL.
 
 Store provider keys and the admin key in Vercel's Environment Variables settings. Never put them in the extension, source files, or GitHub.
@@ -25,7 +25,9 @@ The backend currently stores claims, incidents, and audit records in JSON files.
 
 ## Chrome extension
 
-The unpacked extension source is in `extension/`. Load that folder through `chrome://extensions` with Developer mode enabled. `CivicPulse-Extension.zip` is the packaged extension archive. The extension needs the deployed backend URL to respond over HTTPS before fact checks will work.
+The unpacked extension source is in `extension/`. Load that folder through `chrome://extensions` with Developer mode enabled. `CivicPulse-Extension.zip` is the packaged extension archive. The extension uses the deployed backend URL `https://civic-pluse-sooty.vercel.app` and needs its `/health` endpoint to respond over HTTPS before checks will work.
+
+Automatic visible-claim scanning is enabled by default. It sends only visible text snippets and the current site domain to the backend, checks at a limited pace, and marks claims red only when live search returned sources and the assessment verdict is `FABRICATED_HOAX` or `DISPUTED_RUMOUR`. This is a preliminary AI flag, not a confirmed fact; users can disable automatic scanning in the popup.
 
 ## Local backend
 

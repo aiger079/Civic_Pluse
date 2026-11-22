@@ -1,15 +1,15 @@
 {
   "manifest_version": 3,
   "name": "CivicPulse — Fact & Misinformation Intelligence",
-  "version": "1.1.0",
-  "description": "Evidence-grounded fact checking and rumour triangulation for WhatsApp Web, Instagram, and YouTube with strict user privacy.",
+  "version": "1.2.0",
+  "description": "Evidence-grounded fact checking with automatic red highlighting for live-search claims flagged as false.",
   "permissions": [
     "contextMenus",
     "storage",
     "activeTab"
   ],
   "host_permissions": [
-    "https://civicpluse.naxiv.com/*",
+    "https://civic-pluse-sooty.vercel.app/*",
     "https://web.whatsapp.com/*",
     "https://*.instagram.com/*",
     "https://*.youtube.com/*"
@@ -23,7 +23,7 @@
         "https://web.whatsapp.com/*",
         "https://*.instagram.com/*",
         "https://*.youtube.com/*",
-        "https://civicpluse.naxiv.com/*"
+        "https://civic-pluse-sooty.vercel.app/*"
       ],
       "js": ["content.js"],
       "css": ["content.css"],

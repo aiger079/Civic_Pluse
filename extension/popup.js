@@ -1,4 +1,4 @@
-const API_URL = "https://civicpluse.naxiv.com";
+const API_URL = "https://civic-pluse-sooty.vercel.app";
 
 document.addEventListener("DOMContentLoaded", async () => {
   const statusDot = document.getElementById("statusDot");
@@ -14,7 +14,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // Load toggle state from storage
   chrome.storage.local.get("civicpulse_passive_scan_enabled", (res) => {
-    passiveScanToggle.checked = !!(res && res.civicpulse_passive_scan_enabled);
+    const enabledByDefault = !res || res.civicpulse_passive_scan_enabled === undefined;
+    passiveScanToggle.checked = enabledByDefault || res.civicpulse_passive_scan_enabled === true;
+    if (enabledByDefault) {
+      chrome.storage.local.set({ civicpulse_passive_scan_enabled: true });
+    }
   });
 
   passiveScanToggle.addEventListener("change", () => {
