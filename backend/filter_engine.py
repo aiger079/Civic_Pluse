@@ -3,6 +3,7 @@ import json
 import re
 import math
 import time
+import threading
 from datetime import datetime, timezone
 from html import unescape
 from typing import Dict, Any, List, Optional
@@ -253,6 +254,12 @@ class DualGateEngine:
         self.live_search_enabled = os.getenv(
             "CIVICPULSE_LIVE_SEARCH_ENABLED", "false"
         ).strip().lower() in {"1", "true", "yes"}
+        self.offline_demo_sequence_enabled = os.getenv(
+            "CIVICPULSE_OFFLINE_DEMO_SEQUENCE", "true"
+        ).strip().lower() in {"1", "true", "yes"}
+        self._offline_demo_sequence = (True, True, False, True)
+        self._offline_demo_index = 0
+        self._offline_demo_lock = threading.Lock()
         
         # Load environment variables strictly without hardcoded fallback credentials
         self.openrouter_api_key = (os.getenv("OPENROUTER_API_KEY") or "").strip()
@@ -316,6 +323,7 @@ class DualGateEngine:
         print(f"Fact-check provider: {self.fact_check_provider}")
         print(f"AI provider: {self.ai_provider}")
         print(f"Live web search: {'enabled' if self.live_search_enabled else 'disabled'}")
+        print(f"Offline demo sequence: {'enabled' if self.offline_demo_sequence_enabled else 'disabled'}")
         print(f"Gemini search: {'configured' if self.gemini_api_key else 'not configured'}")
 
         # Local HF Model placeholders
@@ -898,6 +906,27 @@ Polite Rewrite:"""
     ) -> Dict[str, Any]:
         """Search-grounded fact-check with the selected provider and live citations."""
         if not self.live_search_enabled:
+            if self.offline_demo_sequence_enabled:
+                with self._offline_demo_lock:
+                    is_true = self._offline_demo_sequence[self._offline_demo_index]
+                    self._offline_demo_index = (
+                        self._offline_demo_index + 1
+                    ) % len(self._offline_demo_sequence)
+                return {
+                    "verdict": "VERIFIED_TRUE" if is_true else "FABRICATED_HOAX",
+                    "truth_score": 0.85 if is_true else 0.15,
+                    "falsehood_score": 0.15 if is_true else 0.85,
+                    "confidence": 0.85,
+                    "uncertainty_state": False,
+                    "evidence_status": "OFFLINE_DEMO_SEQUENCE",
+                    "provider_used": "offline-demo",
+                    "sources_verified": False,
+                    "search_performed": False,
+                    "summary": "Offline demo result: " + ("true" if is_true else "false") + ".",
+                    "explanation": "This result follows the configured offline demo sequence and does not assess the claim or use online evidence.",
+                    "sources": [],
+                    "actionable_advice": "Do not use demo results to judge real-world claims.",
+                }
             return {
                 "verdict": "INSUFFICIENT_EVIDENCE",
                 "truth_score": 0.50,

@@ -39,6 +39,8 @@ OpenRouter provides the language model; it does not itself guarantee web search.
 
 Live web search is disabled by default through `CIVICPULSE_LIVE_SEARCH_ENABLED=false`. In this mode CivicPulse does not send claims to Gemini Search, Groq browser search, Tavily, or Wikipedia and returns `LIVE_SEARCH_DISABLED` for fact checks. Set the variable to `true` only when online evidence retrieval is intentionally required.
 
+For an offline demonstration, `CIVICPULSE_OFFLINE_DEMO_SEQUENCE=true` returns the repeating sequence `true, true, false, true` for each fact-check trigger. It is clearly labelled `OFFLINE_DEMO_SEQUENCE`; it does not evaluate the submitted claim and must not be used as a real fact-check result.
+
 ## Local backend
 
 Copy `backend/.env.example` to `backend/.env`, fill in the required keys, then run:
