@@ -248,31 +248,46 @@ class DualGateEngine:
         print("Initializing CivicPulse Dual-Gate AI Engine (Safe Routing & Calibrated Verification)...")
         
         # Load environment variables strictly without hardcoded fallback credentials
-        self.groq_api_key = os.getenv("GROQ_API_KEY")
-        if not self.groq_api_key or not self.groq_api_key.strip():
+        self.groq_api_key = (os.getenv("GROQ_API_KEY") or "").strip()
+        self.gemini_api_key = (os.getenv("GEMINI_API_KEY") or "").strip()
+        if not self.groq_api_key and not self.gemini_api_key:
             raise RuntimeError(
-                "CRITICAL SECURITY STOP-SHIP: Missing GROQ_API_KEY environment variable. "
-                "The application refuses to start without explicitly provided secrets."
+                "Missing live-search provider key. Configure GEMINI_API_KEY or GROQ_API_KEY."
             )
         self.groq_model = os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b")
         # Groq's built-in browser search only supports GPT-OSS models; keep the
         # existing Qwen model for other tasks and use this model for fact-checking.
         self.fact_check_model = os.getenv("GROQ_FACT_CHECK_MODEL", "openai/gpt-oss-20b")
-        self.gemini_api_key = (os.getenv("GEMINI_API_KEY") or "").strip()
         self.gemini_fact_check_model = os.getenv("GEMINI_FACT_CHECK_MODEL", "gemini-3.8-flash")
+        self.fact_check_provider = (
+            os.getenv("CIVICPULSE_FACT_CHECK_PROVIDER") or
+            ("gemini" if self.gemini_api_key else "groq")
+        ).strip().lower()
+        if self.fact_check_provider not in {"gemini", "groq"}:
+            raise RuntimeError("CIVICPULSE_FACT_CHECK_PROVIDER must be 'gemini' or 'groq'.")
+        if self.fact_check_provider == "gemini" and not self.gemini_api_key:
+            raise RuntimeError("CIVICPULSE_FACT_CHECK_PROVIDER=gemini requires GEMINI_API_KEY.")
+        if self.fact_check_provider == "groq" and not self.groq_api_key:
+            raise RuntimeError("CIVICPULSE_FACT_CHECK_PROVIDER=groq requires GROQ_API_KEY.")
+        if self.fact_check_provider == "gemini":
+            # Do not initialize or call Groq anywhere while Gemini is selected.
+            # A legacy Groq secret may remain stored in Vercel, but it is ignored.
+            self.groq_api_key = ""
         self.groq_rate_limit_cooldown_seconds = max(
             1, int(os.getenv("GROQ_RATE_LIMIT_COOLDOWN_SECONDS", "60"))
         )
         self._groq_cooldown_until = 0.0
         
-        # Groq Client Initialization
+        # Groq is optional; Gemini can run the fact-check workflow by itself.
         self.groq_client = None
-        try:
-            self.groq_client = Groq(api_key=self.groq_api_key)
-            print(f"Groq Client initialized with model: {self.groq_model}")
-        except Exception as e:
-            raise RuntimeError(f"FATAL: Failed to initialize Groq client: {e}")
-        print(f"Gemini search fallback: {'configured' if self.gemini_api_key else 'not configured'}")
+        if self.groq_api_key:
+            try:
+                self.groq_client = Groq(api_key=self.groq_api_key)
+                print(f"Groq client initialized with model: {self.groq_model}")
+            except Exception as e:
+                print(f"Optional Groq client unavailable: {type(e).__name__}")
+        print(f"Fact-check provider: {self.fact_check_provider}")
+        print(f"Gemini search: {'configured' if self.gemini_api_key else 'not configured'}")
 
         # Local HF Model placeholders
         self.device = "cpu"
@@ -345,15 +360,16 @@ class DualGateEngine:
             except Exception as e:
                 print(f"Error in local toxicity inference: {e}")
 
-        # Groq-based multilingual toxicity classification
+        prompt = (
+            "You are a strict toxicity and humiliation classifier for community chats (English/Hindi/Hinglish). "
+            "Rate from 0.00 (completely civil and respectful) to 1.00 (abusive, degrading, mocking, or hostile). "
+            "Respond with ONLY a JSON object: {\"toxicity_score\": float, \"is_toxic\": bool}\n\n"
+            f"Message JSON string: {json.dumps(text, ensure_ascii=False)}"
+        )
+
+        # Groq is optional. Gemini is used when Groq is absent or unavailable.
         if self.groq_client:
             try:
-                prompt = (
-                    "You are a strict toxicity and humiliation classifier for community chats (English/Hindi/Hinglish). "
-                    "Rate from 0.00 (completely civil and respectful) to 1.00 (abusive, degrading, mocking, or hostile). "
-                    "Respond with ONLY a JSON object: {\"toxicity_score\": float, \"is_toxic\": bool}\n\n"
-                    f"Message JSON string: {json.dumps(text, ensure_ascii=False)}"
-                )
                 res = self.groq_client.chat.completions.create(
                     model=self.groq_model,
                     messages=[{"role": "user", "content": prompt}],
@@ -365,6 +381,13 @@ class DualGateEngine:
                 return _bounded_score(data.get("toxicity_score", 0.0), 0.0)
             except Exception:
                 pass
+
+        if self.gemini_api_key:
+            try:
+                data = _parse_model_json(self._request_gemini_text(prompt))
+                return _bounded_score(data.get("toxicity_score", 0.0), 0.0)
+            except Exception as error:
+                print(f"Gemini toxicity classification failed: {type(error).__name__}")
 
         return 0.0
 
@@ -399,10 +422,7 @@ class DualGateEngine:
                 "reason": "Severe infrastructure or property hazard requiring assistance"
             }
 
-        # Groq semantic evaluation for subtle Hinglish/English urgency
-        if self.groq_client:
-            try:
-                prompt = f"""Analyze if this neighborhood message describes a real-world emergency needing human volunteer assistance.
+        prompt = f"""Analyze if this neighborhood message describes a real-world emergency needing human volunteer assistance.
 Message JSON string: {json.dumps(text, ensure_ascii=False)}
 
 Output JSON:
@@ -412,6 +432,10 @@ Output JSON:
   "required_capability": "drainage_pump" | "medical_doctor" | "first_aid" | "electrician" | "car_jumpstart" | "elderly_assistance" | null,
   "reason": "brief reason"
 }}"""
+
+        # Use an LLM only for subtle cases that the fast safety heuristics missed.
+        if self.groq_client:
+            try:
                 res = self.groq_client.chat.completions.create(
                     model=self.groq_model,
                     messages=[{"role": "user", "content": prompt}],
@@ -438,6 +462,21 @@ Output JSON:
                 }
             except Exception:
                 pass
+
+        if self.gemini_api_key:
+            try:
+                data = _parse_model_json(self._request_gemini_text(prompt))
+                level = data.get("urgency_level")
+                capability = data.get("required_capability")
+                if data.get("is_urgent") is True and level in {"P1", "P2"} and capability in ROUTABLE_CAPABILITIES:
+                    return {
+                        "is_urgent": True,
+                        "urgency_level": level,
+                        "required_capability": capability,
+                        "reason": str(data.get("reason", "Urgency requires human review"))[:200],
+                    }
+            except Exception as error:
+                print(f"Gemini urgency classification failed: {type(error).__name__}")
 
         return {
             "is_urgent": False,
@@ -475,10 +514,7 @@ Output JSON:
             except Exception as e:
                 print(f"Error in local NLI inference: {e}")
 
-        # Cross-lingual NLI via Groq
-        if self.groq_client:
-            try:
-                prompt = f"""You are an expert Natural Language Inference (NLI) evaluator evaluating civic and community claims.
+        prompt = f"""You are an expert Natural Language Inference (NLI) evaluator evaluating civic and community claims.
 Premise JSON string (admin-attested ledger entry): {json.dumps(premise, ensure_ascii=False)}
 Hypothesis JSON string (untrusted incoming message): {json.dumps(hypothesis, ensure_ascii=False)}
 
@@ -493,6 +529,9 @@ Respond with a compact JSON object:
 }}
 Constraints: entailment + contradiction + neutral must sum to 1.0."""
 
+        # Cross-lingual NLI uses Gemini when no working local/Groq inference is available.
+        if self.groq_client:
+            try:
                 res = self.groq_client.chat.completions.create(
                     model=self.groq_model,
                     messages=[{"role": "user", "content": prompt}],
@@ -508,7 +547,19 @@ Constraints: entailment + contradiction + neutral must sum to 1.0."""
                     data.get("confidence"),
                 )
             except Exception as err:
-                print(f"Groq NLI error: {err}")
+                print(f"Groq NLI error: {type(err).__name__}")
+
+        if self.gemini_api_key:
+            try:
+                data = _parse_model_json(self._request_gemini_text(prompt))
+                return _normalized_nli_scores(
+                    data.get("contradiction", 0.0),
+                    data.get("neutral", 0.0),
+                    data.get("entailment", 0.0),
+                    data.get("confidence"),
+                )
+            except Exception as error:
+                print(f"Gemini NLI error: {type(error).__name__}")
 
         return {
             "contradiction": 0.0,
@@ -520,37 +571,43 @@ Constraints: entailment + contradiction + neutral must sum to 1.0."""
 
     def rewrite_toxic_claim(self, toxic_text: str) -> str:
         """Converts humiliating/rude messages into polite civic notices."""
-        if not self.groq_client:
-            return "Please maintain civic courtesy in shared community spaces."
-
         prompt = f"""Rewrite the following rude/humiliating neighbourhood message into a calm, polite civic request. Keep it short, constructive, and neutral in the same language (Hinglish/English).
 
 Original: "{toxic_text}"
 Polite Rewrite:"""
 
-        try:
-            response = self.groq_client.chat.completions.create(
-                model=self.groq_model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.2,
-                max_tokens=80
-            )
-            return response.choices[0].message.content.strip().replace('"', '')
-        except Exception:
-            return "Civic reminder: Please keep shared areas clean and courteous."
+        if self.groq_client:
+            try:
+                response = self.groq_client.chat.completions.create(
+                    model=self.groq_model,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.2,
+                    max_tokens=80
+                )
+                return response.choices[0].message.content.strip().replace('"', '')
+            except Exception:
+                pass
 
-    def _request_gemini_grounded_fact_check(self, prompt: str):
+        if self.gemini_api_key:
+            try:
+                return self._request_gemini_text(prompt).strip().replace('"', '')[:500]
+            except Exception as error:
+                print(f"Gemini rewrite failed: {type(error).__name__}")
+        return "Civic reminder: Please keep shared areas clean and courteous."
+
+    def _request_gemini_interaction(self, prompt: str, tools: Optional[List[Dict[str, str]]] = None):
         if not self.gemini_api_key:
-            raise RuntimeError("Gemini fallback is not configured")
+            raise RuntimeError("Gemini API is not configured")
 
-        body = json.dumps({
+        body = {
             "model": self.gemini_fact_check_model,
             "input": prompt,
-            "tools": [{"type": "google_search"}],
-        }).encode("utf-8")
+        }
+        if tools:
+            body["tools"] = tools
         request = UrlRequest(
             "https://generativelanguage.googleapis.com/v1beta/interactions",
-            data=body,
+            data=json.dumps(body).encode("utf-8"),
             headers={
                 "Content-Type": "application/json",
                 "x-goog-api-key": self.gemini_api_key,
@@ -559,11 +616,32 @@ Polite Rewrite:"""
         )
         timeout = max(5, int(os.getenv("GEMINI_TIMEOUT_SECONDS", "60")))
         with urlopen(request, timeout=timeout) as response:
-            result = json.loads(response.read().decode("utf-8"))
+            return json.loads(response.read().decode("utf-8"))
+
+    def _request_gemini_text(self, prompt: str) -> str:
+        result = self._request_gemini_interaction(prompt)
+        text_parts = []
+        for step in result.get("steps") or []:
+            if not isinstance(step, dict) or step.get("type") != "model_output":
+                continue
+            for block in step.get("content") or []:
+                if isinstance(block, dict) and block.get("type") == "text":
+                    text = block.get("text")
+                    if isinstance(text, str) and text.strip():
+                        text_parts.append(text)
+        output = "\n".join(text_parts).strip()
+        if not output:
+            raise ValueError("Gemini returned no model output text")
+        return output
+
+    def _request_gemini_grounded_fact_check(self, prompt: str):
+        result = self._request_gemini_interaction(
+            prompt, tools=[{"type": "google_search"}]
+        )
         return _extract_gemini_grounded_output(result)
 
     def fact_check_text(self, text: str, context: Optional[str] = None) -> Dict[str, Any]:
-        """Search-grounded fact-check with Groq primary and Gemini Search fallback."""
+        """Search-grounded fact-check with the selected provider and live citations."""
         if not self.groq_client and not self.gemini_api_key:
             return {
                 "verdict": "INSUFFICIENT_EVIDENCE",
@@ -619,8 +697,9 @@ Return one JSON object only (no Markdown):
         gemini_error: Optional[Exception] = None
         search_performed = False
 
+        gemini_is_primary = self.fact_check_provider == "gemini"
         cooling_down = time.monotonic() < self._groq_cooldown_until
-        if self.groq_client and not cooling_down:
+        if not gemini_is_primary and self.groq_client and not cooling_down:
             try:
                 response = self.groq_client.chat.completions.create(
                     model=self.fact_check_model,
@@ -644,18 +723,19 @@ Return one JSON object only (no Markdown):
                     cooldown = _retry_after_seconds(error, self.groq_rate_limit_cooldown_seconds)
                     self._groq_cooldown_until = time.monotonic() + cooldown
                     print(f"Groq fact-check provider cooling down for {cooldown} seconds.")
-        elif cooling_down:
+        elif not gemini_is_primary and cooling_down:
             groq_error = RuntimeError("Groq provider is in rate-limit cooldown")
 
-        # Use Google Search when Groq is unavailable or did not return citations.
-        if not sources and self.gemini_api_key:
+        # Gemini can be the selected primary provider, or the fallback when Groq
+        # is primary but unavailable or returns no usable citations.
+        if self.gemini_api_key and (gemini_is_primary or not sources):
             try:
                 data, sources, gemini_searched = self._request_gemini_grounded_fact_check(prompt)
                 provider_used = "gemini"
                 search_performed = search_performed or gemini_searched
             except Exception as error:
                 gemini_error = error
-                print(f"Gemini fact-check fallback failed: {type(error).__name__}")
+                print(f"Gemini fact-check request failed: {type(error).__name__}")
 
         if not sources:
             search_failed = gemini_error is not None or (
@@ -663,7 +743,9 @@ Return one JSON object only (no Markdown):
             )
             if search_failed:
                 evidence_status = "SEARCH_UNAVAILABLE"
-                if not self.gemini_api_key and groq_error is not None:
+                if gemini_is_primary and gemini_error is not None:
+                    explanation = "Google Gemini Search could not complete. Check the Gemini key, model access, Search grounding eligibility or quota, and service status."
+                elif not self.gemini_api_key and groq_error is not None:
                     explanation = "Groq search was unavailable and the Gemini fallback is not configured. Add a rotated GEMINI_API_KEY to enable automatic fallback."
                 elif groq_error is not None and gemini_error is not None:
                     explanation = "Both Groq and Google Gemini search failed for this request. Check provider quotas, keys, and service status, then retry."

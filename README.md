@@ -1,6 +1,6 @@
 # CivicPulse AI Engine Lab
 
-CivicPulse is a FastAPI backend and Chrome extension for evidence-grounded fact checking. The extension calls the backend's `/api/fact-check` endpoint; the backend uses Groq and can use Gemini as a fallback.
+CivicPulse is a FastAPI backend and Chrome extension for evidence-grounded fact checking. The extension calls the backend's `/api/fact-check` endpoint; Gemini can run as the primary provider for live search and the other AI-assisted triage tasks. When Gemini is selected, Groq is ignored even if a legacy Groq secret remains stored.
 
 ## Deploy the backend on Vercel
 
@@ -8,9 +8,10 @@ The repository includes a root `main.py` entry point and `requirements.txt`, so 
 
 1. Import `https://github.com/aiger079/Civic_Pluse` in Vercel.
 2. Before deploying, add these environment variables in the Vercel project settings:
-   - `GROQ_API_KEY` — required.
+   - `GEMINI_API_KEY` — required when `CIVICPULSE_FACT_CHECK_PROVIDER=gemini`.
+   - `CIVICPULSE_FACT_CHECK_PROVIDER=gemini` — selects Gemini Search as the primary fact-check provider.
+   - `GROQ_API_KEY` — optional; ignored when Gemini is selected.
    - `CIVICPULSE_API_KEY` — required; generate a separate strong secret for the deployed service.
-   - `GEMINI_API_KEY` — optional fallback provider key.
    - `CIVICPULSE_DATA_DIR=/tmp/civicpulse` — required for this JSON-backed demo to start in Vercel's writable temporary directory.
    - `ALLOWED_ORIGINS=https://civic-pluse-sooty.vercel.app` — include each exact website origin that should call the API.
    - `CHROME_EXTENSION_ORIGIN=chrome-extension://<published-extension-id>` — set this to the exact Chrome Web Store extension origin after its ID is known.
