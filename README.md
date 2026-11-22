@@ -15,7 +15,7 @@ The repository includes a root `main.py` entry point and `requirements.txt`, so 
    - `ALLOWED_ORIGINS=https://civic-pluse-sooty.vercel.app` — include each exact website origin that should call the API.
    - `CHROME_EXTENSION_ORIGIN=chrome-extension://<published-extension-id>` — set this to the exact Chrome Web Store extension origin after its ID is known.
 3. The extension source uses `https://civic-pluse-sooty.vercel.app`. If you add a custom domain later, update the API URL, host permissions, and allowed origin before packaging.
-4. Deploy. Vercel will provide an HTTPS URL. Check `/health` and `/` on that URL.
+4. Deploy. Vercel will provide an HTTPS URL. Check `/health` for service status, `/` for the landing page, and `/app` for the fact-checking workspace.
 
 Store provider keys and the admin key in Vercel's Environment Variables settings. Never put them in the extension, source files, or GitHub.
 
@@ -25,7 +25,7 @@ The backend currently stores claims, incidents, and audit records in JSON files.
 
 ## Chrome extension
 
-The unpacked extension source is in `extension/`. Load that folder through `chrome://extensions` with Developer mode enabled. `CivicPulse-Extension.zip` is the packaged extension archive. The extension uses the deployed backend URL `https://civic-pluse-sooty.vercel.app` and needs its `/health` endpoint to respond over HTTPS before checks will work.
+The unpacked extension source is in `extension/`. The landing page links to `CivicPulse-Extension.zip` at `/extension/download`. The Chrome Web Store listing is not published yet, so install the downloaded archive manually: extract it, open `chrome://extensions`, enable Developer mode, then choose **Load unpacked** and select the extracted extension folder. The extension uses the deployed backend URL `https://civic-pluse-sooty.vercel.app` and needs its `/health` endpoint to respond over HTTPS before checks will work.
 
 Automatic visible-claim scanning is enabled by default. It sends only visible text snippets and the current site domain to the backend, checks at a limited pace, and marks claims red only when live search returned sources and the assessment verdict is `FABRICATED_HOAX` or `DISPUTED_RUMOUR`. This is a preliminary AI flag, not a confirmed fact; users can disable automatic scanning in the popup.
 

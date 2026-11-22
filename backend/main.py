@@ -656,11 +656,28 @@ if os.path.exists(static_dir):
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 @app.get("/")
-def serve_ui():
+def serve_landing_page():
+    landing_file = os.path.join(static_dir, "landing.html")
+    if os.path.exists(landing_file):
+        return FileResponse(landing_file)
     index_file = os.path.join(static_dir, "index.html")
     if os.path.exists(index_file):
         return FileResponse(index_file)
     return {"message": "CivicPulse AI Engine Online. Access /health."}
+
+@app.get("/app")
+def serve_fact_checker():
+    index_file = os.path.join(static_dir, "index.html")
+    if os.path.exists(index_file):
+        return FileResponse(index_file)
+    raise HTTPException(status_code=404, detail="Fact-checking workspace is unavailable.")
+
+@app.get("/extension/download")
+def download_chrome_extension():
+    archive_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "CivicPulse-Extension.zip")
+    if os.path.exists(archive_file):
+        return FileResponse(archive_file, media_type="application/zip", filename="CivicPulse-Extension.zip")
+    raise HTTPException(status_code=404, detail="The Chrome extension package is unavailable.")
 
 # Restrict network access: Bind strictly to 127.0.0.1 (localhost) by default
 HOST = os.getenv("HOST", "127.0.0.1")
